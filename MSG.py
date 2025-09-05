@@ -1,6 +1,7 @@
 import streamlit as st
 import sqlite3
 from datetime import datetime
+from streamlit_autorefresh import st_autorefresh
 
 # --- DATABASE SETUP ---
 def init_db():
@@ -44,6 +45,9 @@ def clear_messages():
 st.set_page_config(page_title="💬 Team Chatbox", layout="centered")
 st.title("💬 Team Chatbox")
 
+# Auto-refresh every 5 seconds
+st_autorefresh(interval=5000, limit=None, key="chat_refresh")
+
 # Initialize DB
 init_db()
 
@@ -51,7 +55,7 @@ init_db()
 username = st.text_input("Your Name", key="username")
 message = st.text_input("Enter Message", key="message")
 
-col1, col2, col3 = st.columns([1,1,1])
+col1, col2 = st.columns([1,1])
 
 with col1:
     if st.button("Send"):
@@ -60,10 +64,6 @@ with col1:
             st.rerun()
 
 with col2:
-    if st.button("Refresh"):
-        st.rerun()
-
-with col3:
     if st.button("🗑️ Clear Chat"):
         clear_messages()
         st.rerun()
