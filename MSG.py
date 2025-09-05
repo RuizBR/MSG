@@ -33,6 +33,13 @@ def get_messages():
     conn.close()
     return messages[::-1]  # show oldest first
 
+def clear_messages():
+    conn = sqlite3.connect("chatbox.db")
+    c = conn.cursor()
+    c.execute("DELETE FROM messages")
+    conn.commit()
+    conn.close()
+
 # --- STREAMLIT APP ---
 st.set_page_config(page_title="💬 Team Chatbox", layout="centered")
 st.title("💬 Team Chatbox")
@@ -44,7 +51,8 @@ init_db()
 username = st.text_input("Your Name", key="username")
 message = st.text_input("Enter Message", key="message")
 
-col1, col2 = st.columns([1,1])
+col1, col2, col3 = st.columns([1,1,1])
+
 with col1:
     if st.button("Send"):
         if username and message:
@@ -55,9 +63,16 @@ with col2:
     if st.button("Refresh"):
         st.rerun()
 
+with col3:
+    if st.button("🗑️ Clear Chat"):
+        clear_messages()
+        st.rerun()
 
 # Display chat history
 st.subheader("📜 Chat History")
 messages = get_messages()
-for user, msg, ts in messages:
-    st.write(f"**{user}** [{ts}]: {msg}")
+if messages:
+    for user, msg, ts in messages:
+        st.write(f"**{user}** [{ts}]: {msg}")
+else:
+    st.info("No messages yet. Start the conversation 👋")
