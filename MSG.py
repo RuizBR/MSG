@@ -32,7 +32,7 @@ def get_messages():
     c.execute("SELECT user, message, timestamp FROM messages ORDER BY id DESC LIMIT 50")
     messages = c.fetchall()
     conn.close()
-    return messages[::-1]  # show oldest first
+    return messages[::-1]
 
 def clear_messages():
     conn = sqlite3.connect("chatbox.db")
@@ -42,8 +42,15 @@ def clear_messages():
     conn.close()
 
 # --- STREAMLIT APP ---
-st.set_page_config(page_title="💬 Team Chatbox", layout="centered")
-st.title("💬 Team Chatbox")
+st.set_page_config(page_title="💬 Team Chatbox", layout="wide")
+
+# Sidebar for username
+st.sidebar.title("👤 User Settings")
+username = st.sidebar.text_input("Your Name", key="username", placeholder="Enter your name...")
+
+if st.sidebar.button("🗑️ Clear Chat"):
+    clear_messages()
+    st.rerun()
 
 # Auto-refresh every 5 seconds
 st_autorefresh(interval=5000, limit=None, key="chat_refresh")
@@ -51,29 +58,86 @@ st_autorefresh(interval=5000, limit=None, key="chat_refresh")
 # Initialize DB
 init_db()
 
-# User input
-username = st.text_input("Your Name", key="username")
-message = st.text_input("Enter Message", key="message")
+st.title("💬 Team Chatbox")
 
-col1, col2 = st.columns([1,1])
-
-with col1:
-    if st.button("Send"):
-        if username and message:
-            add_message(username, message)
-            st.rerun()
-
-with col2:
-    if st.button("🗑️ Clear Chat"):
-        clear_messages()
-        st.rerun()
-
-# Display chat history
-st.subheader("📜 Chat History")
+# --- Chat History ---
 messages = get_messages()
-if messages:
-    for user, msg, ts in messages:
-        st.write(f"**{user}** [{ts}]: {msg}")
-else:
-    st.info("No messages yet. Start the conversation 👋")
+chat_html = """
+<style>
+.chat-box {
+    height: 450px;
+    overflow-y: auto;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    background-color: #f9f9f9;
+    display: flex;
+    flex-direction: column;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+.message {
+    margin: 8px;
+    padding: 10px 14px;
+    border-radius: 15px;
+    max-width: 70%;
+    word-wrap: break-word;
+    font-size: 15px;
+}
+.message.user {
+    background-color: #0084ff;
+    color: white;
+    align-self: flex-end;
+    text-align: right;
+}
+.message.other {
+    background-color: #e5e5ea;
+    color: black;
+    align-self: flex-start;
+    text-align: left;
+}
+.timestamp {
+    font-size: 10px;
+    color: gray;
+    margin-top: 4px;
+}
+</style>
+<div class="chat-box">
+"""
 
+for user, msg, ts in messages:
+    if user == username:
+        chat_html += f"""
+        <div class="message user">
+            {msg}
+            <div class="timestamp">{ts}</div>
+        </div>
+        """
+    else:
+        chat_html += f"""
+        <div class="message other">
+            <b>{user}</b><br>{msg}
+            <div class="timestamp">{ts}</div>
+        </div>
+        """
+
+chat_html += """
+<div id="end"></div>
+<script>
+    var chatBox = window.parent.document.querySelector('.chat-box');
+    if (chatBox) { chatBox.scrollTop = chatBox.scrollHeight; }
+</script>
+</div>
+"""
+
+st.components.v1.html(chat_html, height=450, scrolling=True)
+
+# --- Input at Bottom ---
+st.markdown("### 💬 Type a message")
+input_col1, input_col2 = st.columns([6,1])
+with input_col1:
+    message = st.text_input("Message", key="message", label_visibility="collapsed", placeholder="Type your message...")
+with input_col2:
+    if st.button("Send"):
+        if username and message.strip():
+            add_message(username, message.strip())
+            st.rerun()
