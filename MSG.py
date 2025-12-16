@@ -117,31 +117,35 @@ if st.sidebar.button("🗑️ Clear Chat"):
     st.experimental_rerun()
 
 st.sidebar.markdown("### 💬 Message")
-msg_text = st.sidebar.text_area(
-    "Type message...",
-    height=80,
-    key="chat_msg"
-)
 
+# ---------------- Textbox + Send button in one row ----------------
+col_msg, col_send = st.sidebar.columns([4,1])
+
+with col_msg:
+    msg_text = st.text_area(
+        "",
+        height=60,
+        key="chat_msg",
+        placeholder="Type message..."
+    )
+
+with col_send:
+    if st.button("Send", use_container_width=True):
+        if username and st.session_state.chat_msg.strip():
+            add_text_message(username, st.session_state.chat_msg.strip())
+            st.session_state.chat_msg = ""
+            st.experimental_rerun()
+
+# File uploader below the textbox row
 uploaded_file = st.sidebar.file_uploader(
     "📎 Attach image or file",
     type=["png", "jpg", "jpeg", "pdf", "docx"]
 )
 
-def send_text():
-    if username and st.session_state.chat_msg.strip():
-        add_text_message(username, st.session_state.chat_msg.strip())
-        st.session_state.chat_msg = ""
-        st.experimental_rerun()
-
-def send_file():
+if st.sidebar.button("Send File"):
     if username and uploaded_file:
         add_file_message(username, uploaded_file)
         st.experimental_rerun()
-
-c1, c2 = st.sidebar.columns(2)
-c1.button("Send", on_click=send_text, use_container_width=True)
-c2.button("Send File", on_click=send_file, use_container_width=True)
 
 # ================= AUTO REFRESH =================
 st_autorefresh(interval=3000, key="chat_refresh")
@@ -231,7 +235,6 @@ chat_html += """
 const chatBox = document.getElementById("chatBox");
 if (chatBox) {
     chatBox.scrollTop = chatBox.scrollHeight;
-
     const observer = new MutationObserver(() => {
         chatBox.scrollTop = chatBox.scrollHeight;
     });
