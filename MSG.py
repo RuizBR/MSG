@@ -3,7 +3,8 @@ import sqlite3
 from datetime import datetime
 from streamlit_autorefresh import st_autorefresh
 import base64
-from streamlit_webrtc import webrtc_streamer
+import random
+import string
 
 # ================= DATABASE =================
 def init_db():
@@ -113,18 +114,27 @@ c2.button("Send File", on_click=send_file, use_container_width=True)
 # ================= AUTO REFRESH =================
 st_autorefresh(interval=4000, key="chat_refresh")
 
+# ================= VIDEO CALL =================
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 📹 Video Call")
+
+# Generate a random room name per app session for multi-user call
+if 'jitsi_room' not in st.session_state:
+    st.session_state.jitsi_room = 'TeamChat_' + ''.join(random.choices(string.ascii_letters + string.digits, k=6))
+
+if st.sidebar.button("Start Video Call"):
+    room_name = st.session_state.jitsi_room
+    st.sidebar.markdown(f"""
+    <iframe src="https://meet.jit.si/{room_name}" 
+            style="width:100%; height:400px; border:0;">
+    </iframe>
+    """, unsafe_allow_html=True)
+    st.sidebar.info(f"Video call started in room: {room_name}")
+
 # ================= CHAT DISPLAY =================
 st.title("💬 Team Chatbox")
 messages = get_messages()
 
-# ================= VIDEO CALL =================
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 📹 Video Call")
-if st.sidebar.button("Start Video Call"):
-    st.sidebar.info("Video call started! 🎥")
-    webrtc_streamer(key="video-call")
-
-# ================= CHAT HTML =================
 chat_html = """
 <style>
 .chat-container {
@@ -200,7 +210,7 @@ for user, msg, mtype, fname, fdata, ts in messages:
     is_me = user == username
     wrapper_cls = "right" if is_me else "left"
     msg_cls = "user" if is_me else "other"
-    initials = "".join([x[0] for x in user.split()][:2]).upper()  # User initials
+    initials = "".join([x[0] for x in user.split()][:2]).upper()
 
     if mtype == "text":
         content = msg
