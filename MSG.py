@@ -10,6 +10,7 @@ import string
 def init_db():
     conn = sqlite3.connect("chatbox.db", check_same_thread=False)
     c = conn.cursor()
+    # Messages table
     c.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -21,10 +22,22 @@ def init_db():
             timestamp TEXT
         )
     """)
+    # Video call table
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS video_call (
+            id INTEGER PRIMARY KEY,
+            room_name TEXT,
+            started INTEGER
+        )
+    """)
+    # Insert default video call row if empty
+    c.execute("SELECT COUNT(*) FROM video_call")
+    if c.fetchone()[0] == 0:
+        c.execute("INSERT INTO video_call (id, room_name, started) VALUES (1, '', 0)")
     conn.commit()
     conn.close()
 
-
+# ================= MESSAGE FUNCTIONS =================
 def add_text_message(user, message):
     conn = sqlite3.connect("chatbox.db", check_same_thread=False)
     c = conn.cursor()
@@ -34,7 +47,6 @@ def add_text_message(user, message):
     """, (user, message, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
     conn.commit()
     conn.close()
-
 
 def add_file_message(user, file):
     conn = sqlite3.connect("chatbox.db", check_same_thread=False)
@@ -51,7 +63,6 @@ def add_file_message(user, file):
     conn.commit()
     conn.close()
 
-
 def get_messages():
     conn = sqlite3.connect("chatbox.db", check_same_thread=False)
     c = conn.cursor()
@@ -64,7 +75,6 @@ def get_messages():
     conn.close()
     return rows
 
-
 def clear_messages():
     conn = sqlite3.connect("chatbox.db", check_same_thread=False)
     c = conn.cursor()
@@ -72,6 +82,21 @@ def clear_messages():
     conn.commit()
     conn.close()
 
+# ================= VIDEO CALL FUNCTIONS =================
+def start_video_call(room_name):
+    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
+    c = conn.cursor()
+    c.execute("UPDATE video_call SET room_name = ?, started = 1 WHERE id = 1", (room_name,))
+    conn.commit()
+    conn.close()
+
+def get_video_call_status():
+    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
+    c = conn.cursor()
+    c.execute("SELECT room_name, started FROM video_call WHERE id = 1")
+    row = c.fetchone()
+    conn.close()
+    return row
 
 # ================= STREAMLIT SETUP =================
 st.set_page_config(page_title="💬 Team Chatbox", layout="wide")
@@ -114,51 +139,36 @@ c2.button("Send File", on_click=send_file, use_container_width=True)
 # ================= AUTO REFRESH =================
 st_autorefresh(interval=4000, key="chat_refresh")
 
-# ================= VIDEO CALL =================
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 📹 Video Call")
+# ================= VIDEO CALL DISPLAY =================
+st.title("💬 Team Chatbox")
 
-# Persistent video call state
-if "video_call_started" not in st.session_state:
-    st.session_state.video_call_started = False
+# Check video call status
+room_name, started = get_video_call_status()
 
-if "jitsi_room" not in st.session_state:
-    st.session_state.jitsi_room = "TeamChat_" + "".join(
-        random.choices(string.ascii_letters + string.digits, k=6)
-    )
-
-# Button to start video call
-if st.sidebar.button("Start Video Call"):
-    st.session_state.video_call_started = True
-
-# Show video call iframe if started
-if st.session_state.video_call_started:
-    room_name = st.session_state.jitsi_room
-    st.sidebar.markdown(f"""
-    <iframe src="https://meet.jit.si/{room_name}" 
-            style="width:100%; height:400px; border:0;">
-    </iframe>
+if started == 0:
+    # No call started: show start button
+    if st.button("📹 Start Video Call"):
+        # Generate random room name
+        room_name = "TeamChat_" + ''.join(random.choices(string.ascii_letters + string.digits, k=6))
+        start_video_call(room_name)
+        st.experimental_rerun()
+else:
+    # Call is active: show iframe to all users
+    st.markdown(f"### 📹 Video Call Active: Room `{room_name}`")
+    st.markdown(f"""
+        <iframe src="https://meet.jit.si/{room_name}" 
+                style="width:100%; height:400px; border:0;">
+        </iframe>
     """, unsafe_allow_html=True)
-    st.sidebar.info(f"Video call started in room: {room_name}")
+    st.info(f"Join the video call in room: {room_name}")
 
 # ================= CHAT DISPLAY =================
-st.title("💬 Team Chatbox")
 messages = get_messages()
 
 chat_html = """
 <style>
 .chat-container { display: flex; justify-content: center; }
-.chat-box {
-    width: 100%;
-    max-width: 900px;
-    height: 600px;
-    padding: 14px;
-    border: 1px solid #ddd;
-    border-radius: 14px;
-    background: #ffffff;
-    font-family: Segoe UI;
-    overflow-y: auto;
-}
+.chat-box { width: 100%; max-width: 900px; height: 600px; padding: 14px; border: 1px solid #ddd; border-radius: 14px; background: #ffffff; font-family: Segoe UI; overflow-y: auto; }
 .message-wrapper { display: flex; align-items: flex-start; margin: 6px 0; }
 .message-wrapper.right { justify-content: flex-end; }
 .message-wrapper.left { justify-content: flex-start; }
