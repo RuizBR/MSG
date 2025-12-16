@@ -9,8 +9,6 @@ from streamlit_autorefresh import st_autorefresh
 def init_db():
     conn = sqlite3.connect("chatbox.db", check_same_thread=False)
     c = conn.cursor()
-    
-    # Users table
     c.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -18,8 +16,6 @@ def init_db():
             password TEXT
         )
     """)
-    
-    # Messages table (private conversations)
     c.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -32,7 +28,6 @@ def init_db():
             timestamp TEXT
         )
     """)
-    
     conn.commit()
     conn.close()
 
@@ -46,7 +41,8 @@ def register_user(username, password):
     conn = sqlite3.connect("chatbox.db", check_same_thread=False)
     c = conn.cursor()
     try:
-        c.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, hash_password(password)))
+        c.execute("INSERT INTO users (username, password) VALUES (?, ?)", 
+                  (username, hash_password(password)))
         conn.commit()
         return True
     except sqlite3.IntegrityError:
@@ -67,28 +63,30 @@ def send_message(sender, receiver, message, msg_type="text", file=None):
     conn = sqlite3.connect("chatbox.db", check_same_thread=False)
     c = conn.cursor()
     if msg_type == "text":
-        c.execute("""INSERT INTO messages 
-                     (sender, receiver, message, msg_type, timestamp)
-                     VALUES (?, ?, ?, ?, ?)""",
-                  (sender, receiver, message, msg_type, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+        c.execute("""
+            INSERT INTO messages (sender, receiver, message, msg_type, timestamp)
+            VALUES (?, ?, ?, ?, ?)
+        """, (sender, receiver, message, msg_type, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
     elif msg_type == "file" and file:
-        c.execute("""INSERT INTO messages 
-                     (sender, receiver, msg_type, file_name, file_data, timestamp)
-                     VALUES (?, ?, ?, ?, ?, ?)""",
-                  (sender, receiver, msg_type, file.name, file.getvalue(), datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+        c.execute("""
+            INSERT INTO messages (sender, receiver, msg_type, file_name, file_data, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (sender, receiver, msg_type, file.name, file.getvalue(), datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
     conn.commit()
     conn.close()
 
-def get_conversation(user1, user2):
+def get_conversation(user1, user2, limit=50):
     conn = sqlite3.connect("chatbox.db", check_same_thread=False)
     c = conn.cursor()
-    c.execute("""SELECT sender, message, msg_type, file_name, file_data, timestamp 
-                 FROM messages 
-                 WHERE (sender = ? AND receiver = ?) OR (sender = ? AND receiver = ?)
-                 ORDER BY id ASC""", (user1, user2, user2, user1))
+    c.execute("""
+        SELECT sender, message, msg_type, file_name, file_data, timestamp
+        FROM messages
+        WHERE (sender = ? AND receiver = ?) OR (sender = ? AND receiver = ?)
+        ORDER BY id DESC LIMIT ?
+    """, (user1, user2, user2, user1, limit))
     rows = c.fetchall()
     conn.close()
-    return rows
+    return rows[::-1]  # reverse to show oldest first
 
 # ================= STREAMLIT SETUP =================
 st.set_page_config(page_title="💬 Private Chatbox", layout="wide")
@@ -97,24 +95,25 @@ st.set_page_config(page_title="💬 Private Chatbox", layout="wide")
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.username = ""
+if 'username_input' not in st.session_state:
+    st.session_state.username_input = ""
+if 'password_input' not in st.session_state:
+    st.session_state.password_input = ""
 
 # ================= SIDEBAR =================
 st.sidebar.title("💬 Private Chatbox")
 
-# ---------------- LOGOUT ----------------
-if st.session_state.logged_in:
-    if st.sidebar.button("🔓 Logout"):
-        st.session_state.logged_in = False
-        st.session_state.username = ""
-        st.experimental_rerun()
-
 # ---------------- LOGIN / REGISTER ----------------
 if not st.session_state.logged_in:
     mode = st.sidebar.radio("Mode", ["Login", "Register"])
-    username_input = st.sidebar.text_input("Username")
-    password_input = st.sidebar.text_input("Password", type="password")
+    
+    st.session_state.username_input = st.sidebar.text_input("Username", key="username_input")
+    st.session_state.password_input = st.sidebar.text_input("Password", type="password", key="password_input")
 
     if st.sidebar.button(mode):
+        username_input = st.session_state.username_input.strip()
+        password_input = st.session_state.password_input.strip()
+
         if username_input and password_input:
             if mode == "Register":
                 if register_user(username_input, password_input):
@@ -123,49 +122,56 @@ if not st.session_state.logged_in:
                     st.sidebar.error("Username already exists.")
             elif mode == "Login":
                 if login_user(username_input, password_input):
+                    # ✅ Safe session state setup
                     st.session_state.logged_in = True
                     st.session_state.username = username_input
                     st.experimental_rerun()
                 else:
                     st.sidebar.error("Invalid username or password.")
 
-# ---------------- CHAT INTERFACE ----------------
+# ---------------- LOGGED-IN CHAT INTERFACE ----------------
 if st.session_state.logged_in:
     st.sidebar.info(f"Logged in as: {st.session_state.username}")
-    
-    # List users to chat with
+
+    if st.sidebar.button("🔓 Logout"):
+        st.session_state.logged_in = False
+        st.session_state.username = ""
+        st.experimental_rerun()
+
+    # Users list
     conn = sqlite3.connect("chatbox.db", check_same_thread=False)
     c = conn.cursor()
     c.execute("SELECT username FROM users WHERE username != ?", (st.session_state.username,))
     users = [row[0] for row in c.fetchall()]
     conn.close()
-    
+
     if not users:
         st.warning("No other users available to chat.")
     else:
         chat_with = st.sidebar.selectbox("Chat with:", users)
-        
-        # Textbox
-        msg_text = st.sidebar.text_area("", height=60, key="chat_msg")
-        if st.sidebar.button("Send"):
-            if msg_text.strip():
-                send_message(st.session_state.username, chat_with, msg_text.strip())
-                st.experimental_rerun()
-        
-        # File uploader
-        uploaded_file = st.sidebar.file_uploader("📎 Attach image or file", type=["png","jpg","jpeg","pdf","docx"])
-        if st.sidebar.button("Send File"):
-            if uploaded_file:
-                send_message(st.session_state.username, chat_with, None, msg_type="file", file=uploaded_file)
-                st.experimental_rerun()
-        
+
+        # Message input
+        msg_text = st.text_area("Type your message...", height=60, key="chat_msg")
+        send_clicked = st.button("Send")
+
+        uploaded_file = st.file_uploader("📎 Attach image or file", type=["png","jpg","jpeg","pdf","docx"])
+        send_file_clicked = st.button("Send File")
+
+        if send_clicked and msg_text.strip():
+            send_message(st.session_state.username, chat_with, msg_text.strip())
+            st.experimental_rerun()
+
+        if send_file_clicked and uploaded_file:
+            send_message(st.session_state.username, chat_with, None, msg_type="file", file=uploaded_file)
+            st.experimental_rerun()
+
         # ================= AUTO REFRESH =================
         st_autorefresh(interval=3000, key="chat_refresh")
-        
+
         # ================= CHAT DISPLAY =================
         st.title(f"💬 Chat with {chat_with}")
-        messages = get_conversation(st.session_state.username, chat_with)
-        
+        messages = get_conversation(st.session_state.username, chat_with, limit=50)
+
         chat_html = """
         <style>
         .chat-container { display: flex; justify-content: center; }
@@ -181,13 +187,13 @@ if st.session_state.logged_in:
         </style>
         <div class="chat-container"><div class="chat-box" id="chatBox">
         """
-        
+
         for sender, msg, mtype, fname, fdata, ts in messages:
             is_me = sender == st.session_state.username
             wrapper_cls = "right" if is_me else "left"
             msg_cls = "user" if is_me else "other"
             initials = "".join([x[0] for x in sender.split()][:2]).upper()
-            
+
             if mtype == "text":
                 content = msg
             else:
@@ -197,7 +203,7 @@ if st.session_state.logged_in:
                 else:
                     file64 = base64.b64encode(fdata).decode()
                     content = f'<a download="{fname}" href="data:application/octet-stream;base64,{file64}">📎 {fname}</a>'
-            
+
             if is_me:
                 chat_html += f"""
                 <div class="message-wrapper {wrapper_cls}">
@@ -218,7 +224,7 @@ if st.session_state.logged_in:
                     </div>
                 </div>
                 """
-        
+
         chat_html += """
         <div id="end"></div></div></div>
         <script>
@@ -232,5 +238,5 @@ if st.session_state.logged_in:
         }
         </script>
         """
-        
+
         st.components.v1.html(chat_html, height=650, scrolling=False)
