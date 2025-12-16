@@ -30,7 +30,6 @@ def init_db():
             started INTEGER
         )
     """)
-    # Insert default video call row if empty
     c.execute("SELECT COUNT(*) FROM video_call")
     if c.fetchone()[0] == 0:
         c.execute("INSERT INTO video_call (id, room_name, started) VALUES (1, '', 0)")
@@ -90,6 +89,13 @@ def start_video_call(room_name):
     conn.commit()
     conn.close()
 
+def end_video_call():
+    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
+    c = conn.cursor()
+    c.execute("UPDATE video_call SET room_name = '', started = 0 WHERE id = 1")
+    conn.commit()
+    conn.close()
+
 def get_video_call_status():
     conn = sqlite3.connect("chatbox.db", check_same_thread=False)
     c = conn.cursor()
@@ -108,13 +114,12 @@ username = st.sidebar.text_input("Your Name", placeholder="Enter your name...")
 
 if st.sidebar.button("🗑️ Clear Chat"):
     clear_messages()
-    st.rerun()
+    st.experimental_rerun()
 
 st.sidebar.markdown("### 💬 Message")
-st.text_area(
-    "",
-    placeholder="Type message...",
-    height=70,
+msg_text = st.sidebar.text_area(
+    "Type message...",
+    height=80,
     key="chat_msg"
 )
 
@@ -127,40 +132,37 @@ def send_text():
     if username and st.session_state.chat_msg.strip():
         add_text_message(username, st.session_state.chat_msg.strip())
         st.session_state.chat_msg = ""
+        st.experimental_rerun()
 
 def send_file():
     if username and uploaded_file:
         add_file_message(username, uploaded_file)
+        st.experimental_rerun()
 
 c1, c2 = st.sidebar.columns(2)
 c1.button("Send", on_click=send_text, use_container_width=True)
 c2.button("Send File", on_click=send_file, use_container_width=True)
 
 # ================= AUTO REFRESH =================
-# Only refresh chat messages
-st_autorefresh(interval=4000, key="chat_refresh")
+st_autorefresh(interval=3000, key="chat_refresh")
 
 # ================= VIDEO CALL =================
 st.title("💬 Team Chatbox")
-
-# Check video call status
 room_name, started = get_video_call_status()
 
 if started == 0:
     if st.button("📹 Start Video Call"):
-        # Generate random room name
         room_name = "TeamChat_" + ''.join(random.choices(string.ascii_letters + string.digits, k=6))
         start_video_call(room_name)
-        # Open the room in a new tab
         js = f"window.open('https://meet.jit.si/{room_name}', '_blank')"
         st.components.v1.html(f"<script>{js}</script>", height=0)
 else:
     st.markdown(f"### 📹 Video Call Active: Room `{room_name}`")
-    st.markdown(
-        f"[Join Video Call in New Tab](https://meet.jit.si/{room_name})",
-        unsafe_allow_html=True
-    )
-    st.info(f"Click the link to join the video call in a new tab.")
+    st.markdown(f"[Join Video Call in New Tab](https://meet.jit.si/{room_name})", unsafe_allow_html=True)
+    st.info("Click the link to join the video call in a new tab.")
+    if st.button("🔴 End Video Call"):
+        end_video_call()
+        st.experimental_rerun()
 
 # ================= CHAT DISPLAY =================
 messages = get_messages()
@@ -230,35 +232,12 @@ const chatBox = document.getElementById("chatBox");
 if (chatBox) {
     chatBox.scrollTop = chatBox.scrollHeight;
 
-    let isUserScrolling = false;
-    chatBox.addEventListener('scroll', () => {
-        const nearBottom = chatBox.scrollHeight - chatBox.scrollTop - chatBox.clientHeight < 50;
-        isUserScrolling = !nearBottom;
-    });
-
     const observer = new MutationObserver(() => {
-        if (!isUserScrolling) return;
         chatBox.scrollTop = chatBox.scrollHeight;
     });
-
     observer.observe(chatBox, { childList: true, subtree: true });
 }
 </script>
 """
 
 st.components.v1.html(chat_html, height=650, scrolling=False)
-
-# ================= ENTER = SEND =================
-st.markdown("""
-<script>
-const textarea = window.parent.document.querySelector('textarea');
-if (textarea) {
-    textarea.addEventListener('keydown', e => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            document.querySelector('button').click();
-        }
-    });
-}
-</script>
-""", unsafe_allow_html=True)
