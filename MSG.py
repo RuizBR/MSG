@@ -10,8 +10,6 @@ import string
 def init_db():
     conn = sqlite3.connect("chatbox.db", check_same_thread=False)
     c = conn.cursor()
-    
-    # Messages table
     c.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -23,8 +21,6 @@ def init_db():
             timestamp TEXT
         )
     """)
-    
-    # Video call table
     c.execute("""
         CREATE TABLE IF NOT EXISTS video_call (
             id INTEGER PRIMARY KEY,
@@ -32,12 +28,9 @@ def init_db():
             started INTEGER
         )
     """)
-    
-    # Ensure a default row exists for video call
     c.execute("SELECT COUNT(*) FROM video_call")
     if c.fetchone()[0] == 0:
         c.execute("INSERT INTO video_call (id, room_name, started) VALUES (1, '', 0)")
-    
     conn.commit()
     conn.close()
 
@@ -105,18 +98,18 @@ def get_video_call_status():
     return row
 
 # ================= STREAMLIT SETUP =================
-st.set_page_config(page_title="Team Chatbox", layout="wide")
+st.set_page_config(page_title="?? Team Chatbox", layout="wide")
 init_db()
 
 # ================= SIDEBAR =================
-st.sidebar.title("User Settings")
+st.sidebar.title("?? User Settings")
 username = st.sidebar.text_input("Your Name", placeholder="Enter your name...")
 
-if st.sidebar.button("Clear Chat"):
+if st.sidebar.button("??? Clear Chat"):
     clear_messages()
     st.experimental_rerun()
 
-st.sidebar.markdown("### Message")
+st.sidebar.markdown("### ?? Message")
 
 # ---------------- Textbox ----------------
 msg_text = st.sidebar.text_area(
@@ -126,7 +119,7 @@ msg_text = st.sidebar.text_area(
     placeholder="Type message..."
 )
 
-# ---------------- Send button ----------------
+# ---------------- Send button under textbox ----------------
 if st.sidebar.button("Send", use_container_width=True):
     if username and msg_text.strip():
         add_text_message(username, msg_text.strip())
@@ -135,7 +128,7 @@ if st.sidebar.button("Send", use_container_width=True):
 
 # ---------------- File uploader ----------------
 uploaded_file = st.sidebar.file_uploader(
-    "Attach image or file",
+    "?? Attach image or file",
     type=["png", "jpg", "jpeg", "pdf", "docx"]
 )
 
@@ -148,20 +141,20 @@ if st.sidebar.button("Send File"):
 st_autorefresh(interval=3000, key="chat_refresh")
 
 # ================= VIDEO CALL =================
-st.title("Team Chatbox")
+st.title("?? Team Chatbox")
 room_name, started = get_video_call_status()
 
 if started == 0:
-    if st.button("Start Video Call"):
+    if st.button("?? Start Video Call"):
         room_name = "TeamChat_" + ''.join(random.choices(string.ascii_letters + string.digits, k=6))
         start_video_call(room_name)
         js = f"window.open('https://meet.jit.si/{room_name}', '_blank')"
         st.components.v1.html(f"<script>{js}</script>", height=0)
 else:
-    st.markdown(f"### Video Call Active: Room `{room_name}`")
+    st.markdown(f"### ?? Video Call Active: Room `{room_name}`")
     st.markdown(f"[Join Video Call in New Tab](https://meet.jit.si/{room_name})", unsafe_allow_html=True)
     st.info("Click the link to join the video call in a new tab.")
-    if st.button("End Video Call"):
+    if st.button("?? End Video Call"):
         end_video_call()
         st.experimental_rerun()
 
@@ -200,7 +193,7 @@ for user, msg, mtype, fname, fdata, ts in messages:
             content = f'<img src="data:image/png;base64,{img64}" style="max-width:260px;border-radius:12px;">'
         else:
             file64 = base64.b64encode(fdata).decode()
-            content = f'<a download="{fname}" href="data:application/octet-stream;base64,{file64}">Download {fname}</a>'
+            content = f'<a download="{fname}" href="data:application/octet-stream;base64,{file64}">?? {fname}</a>'
 
     if is_me:
         chat_html += f"""
@@ -241,3 +234,4 @@ if (chatBox) {
 """
 
 st.components.v1.html(chat_html, height=650, scrolling=False)
+
