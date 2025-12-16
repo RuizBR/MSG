@@ -2,41 +2,66 @@ import streamlit as st
 import sqlite3
 from datetime import datetime
 from streamlit_autorefresh import st_autorefresh
+import base64
 
-# --- DATABASE SETUP ---
+# ================= DATABASE =================
 def init_db():
     conn = sqlite3.connect("chatbox.db")
     c = conn.cursor()
-    c.execute('''
+    c.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user TEXT,
             message TEXT,
+            msg_type TEXT,
+            file_name TEXT,
+            file_data BLOB,
             timestamp TEXT
         )
-    ''')
+    """)
     conn.commit()
     conn.close()
 
-def add_message(user, message):
+
+def add_text_message(user, message):
     conn = sqlite3.connect("chatbox.db")
     c = conn.cursor()
-    c.execute(
-        "INSERT INTO messages (user, message, timestamp) VALUES (?, ?, ?)",
-        (user, message, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    )
+    c.execute("""
+        INSERT INTO messages (user, message, msg_type, timestamp)
+        VALUES (?, ?, 'text', ?)
+    """, (user, message, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
     conn.commit()
     conn.close()
+
+
+def add_file_message(user, file):
+    conn = sqlite3.connect("chatbox.db")
+    c = conn.cursor()
+    c.execute("""
+        INSERT INTO messages (user, msg_type, file_name, file_data, timestamp)
+        VALUES (?, 'file', ?, ?, ?)
+    """, (
+        user,
+        file.name,
+        file.getvalue(),
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ))
+    conn.commit()
+    conn.close()
+
 
 def get_messages():
     conn = sqlite3.connect("chatbox.db")
     c = conn.cursor()
-    c.execute(
-        "SELECT user, message, timestamp FROM messages ORDER BY id DESC LIMIT 50"
-    )
-    messages = c.fetchall()
+    c.execute("""
+        SELECT user, message, msg_type, file_name, file_data, timestamp
+        FROM messages
+        ORDER BY id DESC LIMIT 50
+    """)
+    rows = c.fetchall()
     conn.close()
-    return messages[::-1]
+    return rows[::-1]
+
 
 def clear_messages():
     conn = sqlite3.connect("chatbox.db")
@@ -45,155 +70,144 @@ def clear_messages():
     conn.commit()
     conn.close()
 
-# --- STREAMLIT APP ---
-st.set_page_config(page_title="💬 Team Chatbox", layout="wide")
 
-# --- Sidebar: user settings + input ---
+# ================= STREAMLIT SETUP =================
+st.set_page_config(page_title="💬 Team Chatbox", layout="wide")
+init_db()
+
+# ================= SIDEBAR =================
 st.sidebar.title("👤 User Settings")
-username = st.sidebar.text_input("Your Name", key="username", placeholder="Enter your name...")
+username = st.sidebar.text_input("Your Name", placeholder="Enter your name...")
 
 if st.sidebar.button("🗑️ Clear Chat"):
     clear_messages()
     st.rerun()
 
-st.sidebar.markdown("### 💬 Type a message")
-msg_key = "chat_input"
+st.sidebar.markdown("### 💬 Message")
 message = st.sidebar.text_area(
     "",
-    key=msg_key,
-    label_visibility="collapsed",
-    placeholder="Type a message... (Enter = Send, Shift+Enter = New Line)",
-    height=70
+    placeholder="Type message...",
+    height=70,
+    key="chat_msg"
 )
 
-def send_message():
-    if username and st.session_state[msg_key].strip():
-        add_message(username, st.session_state[msg_key].strip())
-        st.session_state[msg_key] = ""
-        
+uploaded_file = st.sidebar.file_uploader(
+    "📎 Attach image or file",
+    type=["png", "jpg", "jpeg", "pdf", "docx"]
+)
 
-st.sidebar.button("Send", key="send_button", use_container_width=True, on_click=send_message)
+def send_text():
+    if username and st.session_state.chat_msg.strip():
+        add_text_message(username, st.session_state.chat_msg.strip())
+        st.session_state.chat_msg = ""
 
-# --- Auto-refresh chat ---
-st_autorefresh(interval=5000, limit=None, key="chat_refresh")
+def send_file():
+    if username and uploaded_file:
+        add_file_message(username, uploaded_file)
 
-# --- Initialize DB ---
-init_db()
+col1, col2 = st.sidebar.columns(2)
+col1.button("Send", on_click=send_text, use_container_width=True)
+col2.button("Send File", on_click=send_file, use_container_width=True)
 
+# ================= AUTO REFRESH =================
+st_autorefresh(interval=5000, key="chat_refresh")
+
+# ================= CHAT DISPLAY =================
 st.title("💬 Team Chatbox")
-
-# --- Chat History on main page ---
 messages = get_messages()
+
 chat_html = """
 <style>
-.chat-container {
-    display: flex;
-    flex-direction: column;
-}
+.chat-container { display:flex; flex-direction:column; }
 .chat-box {
-    padding: 6px;
-    border: 1px solid #ddd;
-    border-radius: 10px;
-    background-color: #ffffff;
-    display: flex;
-    flex-direction: column;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    padding:10px;
+    border:1px solid #ddd;
+    border-radius:10px;
+    background:#fff;
+    font-family:Segoe UI;
 }
 .message {
-    display: flex;
-    align-items: flex-start;
-    margin: 4px 0;
-    padding: 8px 12px;
-    border-radius: 15px;
-    max-width: 85%;
-    word-wrap: break-word;
-    font-size: 14px;
-    line-height: 1.3;
+    margin:6px 0;
+    padding:10px 14px;
+    border-radius:16px;
+    max-width:80%;
+    font-size:14px;
 }
-.message.user {
-    background-color: #0084ff;
-    color: white;
-    align-self: flex-end;
-    text-align: right;
-    flex-direction: row-reverse;
+.user {
+    background:#0084ff;
+    color:white;
+    align-self:flex-end;
 }
-.message.other {
-    background-color: #e5e5ea;
-    color: black;
-    align-self: flex-start;
-    text-align: left;
-}
-.user-icon {
-    display: inline-block;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    background-color: #888;
-    color: white;
-    text-align: center;
-    line-height: 24px;
-    font-size: 14px;
-    margin-right: 8px;
-}
-.message.user .user-icon {
-    margin-left: 8px;
-    margin-right: 0;
+.other {
+    background:#e5e5ea;
+    color:black;
+    align-self:flex-start;
 }
 .timestamp {
-    font-size: 10px;
-    color: gray;
-    margin-top: 2px;
+    font-size:10px;
+    opacity:0.6;
+    margin-top:4px;
 }
 </style>
 
 <div class="chat-container">
-    <div class="chat-box" id="chatBox">
+<div class="chat-box" id="chatBox">
 """
 
-for idx, (user, msg, ts) in enumerate(messages):
-    icon = user[0].upper() if user else "?"
-    if user == username:
-        chat_html += f"""
-        <div class="message user" id="msg-{idx}">
-            <span class="user-icon">{icon}</span>
-            {msg}
-            <div class="timestamp">{ts}</div>
-        </div>
-        """
+for user, msg, mtype, fname, fdata, ts in messages:
+    is_me = user == username
+    cls = "user" if is_me else "other"
+
+    if mtype == "text":
+        content = msg
+
     else:
-        chat_html += f"""
-        <div class="message other" id="msg-{idx}">
-            <span class="user-icon">{icon}</span>
-            <b>{user}</b><br>{msg}
-            <div class="timestamp">{ts}</div>
-        </div>
-        """
+        if fname.lower().endswith(("png", "jpg", "jpeg")):
+            img64 = base64.b64encode(fdata).decode()
+            content = f"""
+            <img src="data:image/png;base64,{img64}"
+                 style="max-width:250px;border-radius:10px;">
+            """
+        else:
+            file64 = base64.b64encode(fdata).decode()
+            content = f"""
+            <a download="{fname}"
+               href="data:application/octet-stream;base64,{file64}">
+               📎 {fname}
+            </a>
+            """
+
+    chat_html += f"""
+    <div class="message {cls}">
+        <b>{user}</b><br>
+        {content}
+        <div class="timestamp">{ts}</div>
+    </div>
+    """
 
 chat_html += """
-        <div id="end"></div>
-    </div>
+<div id="end"></div>
+</div>
 </div>
 <script>
-let chatBox = document.getElementById("chatBox");
-let endMarker = document.getElementById("end");
-endMarker.scrollIntoView({behavior: "smooth", block: "end"});
+document.getElementById("end").scrollIntoView({behavior:"smooth"});
 </script>
 """
 
-st.components.v1.html(chat_html, height=800, scrolling=False)  # main page expands naturally
+st.components.v1.html(chat_html, height=800, scrolling=False)
 
-# --- JS for Enter = Send in sidebar ---
+# ================= ENTER KEY SEND =================
 st.markdown("""
 <script>
 const textarea = window.parent.document.querySelector('textarea');
 if (textarea) {
-    textarea.addEventListener('keydown', function(event) {
-        if (event.key === 'Enter' && !event.shiftKey) {
-            event.preventDefault();
-            const sendBtn = window.parent.document.querySelector('button[kind="secondary"]');
-            if (sendBtn) sendBtn.click();
+    textarea.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            document.querySelector('button').click();
         }
     });
 }
 </script>
 """, unsafe_allow_html=True)
+
