@@ -3,6 +3,7 @@ import sqlite3
 from datetime import datetime
 from streamlit_autorefresh import st_autorefresh
 import base64
+from streamlit_webrtc import webrtc_streamer
 
 # ================= DATABASE =================
 def init_db():
@@ -116,6 +117,14 @@ st_autorefresh(interval=4000, key="chat_refresh")
 st.title("💬 Team Chatbox")
 messages = get_messages()
 
+# ================= VIDEO CALL =================
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 📹 Video Call")
+if st.sidebar.button("Start Video Call"):
+    st.sidebar.info("Video call started! 🎥")
+    webrtc_streamer(key="video-call")
+
+# ================= CHAT HTML =================
 chat_html = """
 <style>
 .chat-container {
