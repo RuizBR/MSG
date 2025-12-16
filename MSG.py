@@ -4,32 +4,37 @@ from datetime import datetime
 import base64
 import hashlib
 from streamlit_autorefresh import st_autorefresh
+import threading
+
+# ================= THREAD LOCK =================
+db_lock = threading.Lock()
 
 # ================= DATABASE =================
 def init_db():
-    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
-    c = conn.cursor()
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE,
-            password TEXT
-        )
-    """)
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS messages (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            sender TEXT,
-            receiver TEXT,
-            message TEXT,
-            msg_type TEXT,
-            file_name TEXT,
-            file_data BLOB,
-            timestamp TEXT
-        )
-    """)
-    conn.commit()
-    conn.close()
+    with db_lock:
+        conn = sqlite3.connect("chatbox.db", check_same_thread=False)
+        c = conn.cursor()
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE,
+                password TEXT
+            )
+        """)
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sender TEXT,
+                receiver TEXT,
+                message TEXT,
+                msg_type TEXT,
+                file_name TEXT,
+                file_data BLOB,
+                timestamp TEXT
+            )
+        """)
+        conn.commit()
+        conn.close()
 
 init_db()
 
@@ -38,56 +43,60 @@ def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
 def register_user(username, password):
-    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
-    c = conn.cursor()
-    try:
-        c.execute("INSERT INTO users (username, password) VALUES (?, ?)", 
-                  (username, hash_password(password)))
-        conn.commit()
-        return True
-    except sqlite3.IntegrityError:
-        return False
-    finally:
-        conn.close()
+    with db_lock:
+        conn = sqlite3.connect("chatbox.db", check_same_thread=False)
+        c = conn.cursor()
+        try:
+            c.execute("INSERT INTO users (username, password) VALUES (?, ?)", 
+                      (username, hash_password(password)))
+            conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False
+        finally:
+            conn.close()
 
 def login_user(username, password):
-    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
-    c = conn.cursor()
-    c.execute("SELECT password FROM users WHERE username = ?", (username,))
-    result = c.fetchone()
-    conn.close()
-    return result and result[0] == hash_password(password)
+    with db_lock:
+        conn = sqlite3.connect("chatbox.db", check_same_thread=False)
+        c = conn.cursor()
+        c.execute("SELECT password FROM users WHERE username = ?", (username,))
+        result = c.fetchone()
+        conn.close()
+        return result and result[0] == hash_password(password)
 
 # ================= MESSAGE FUNCTIONS =================
 def send_message(sender, receiver, message, msg_type="text", file=None):
-    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
-    c = conn.cursor()
-    if msg_type == "text":
-        c.execute("""
-            INSERT INTO messages (sender, receiver, message, msg_type, timestamp)
-            VALUES (?, ?, ?, ?, ?)
-        """, (sender, receiver, message, msg_type, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-    elif msg_type == "file" and file:
-        file_data = file.read() if hasattr(file, "read") else file.getvalue()
-        c.execute("""
-            INSERT INTO messages (sender, receiver, msg_type, file_name, file_data, timestamp)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (sender, receiver, msg_type, file.name, file_data, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-    conn.commit()
-    conn.close()
+    with db_lock:
+        conn = sqlite3.connect("chatbox.db", check_same_thread=False)
+        c = conn.cursor()
+        if msg_type == "text":
+            c.execute("""
+                INSERT INTO messages (sender, receiver, message, msg_type, timestamp)
+                VALUES (?, ?, ?, ?, ?)
+            """, (sender, receiver, message, msg_type, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+        elif msg_type == "file" and file:
+            file_data = file.read() if hasattr(file, "read") else file.getvalue()
+            c.execute("""
+                INSERT INTO messages (sender, receiver, msg_type, file_name, file_data, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (sender, receiver, msg_type, file.name, file_data, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+        conn.commit()
+        conn.close()
 
 def get_conversation(user1, user2, limit=50):
-    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
-    c = conn.cursor()
-    c.execute("""
-        SELECT sender, message, msg_type, file_name, file_data, timestamp
-        FROM messages
-        WHERE (sender = ? AND receiver = ?) OR (sender = ? AND receiver = ?)
-        ORDER BY id DESC LIMIT ?
-    """, (user1, user2, user2, user1, limit))
-    rows = c.fetchall()
-    conn.close()
-    return rows[::-1]  # oldest first
+    with db_lock:
+        conn = sqlite3.connect("chatbox.db", check_same_thread=False)
+        c = conn.cursor()
+        c.execute("""
+            SELECT sender, message, msg_type, file_name, file_data, timestamp
+            FROM messages
+            WHERE (sender = ? AND receiver = ?) OR (sender = ? AND receiver = ?)
+            ORDER BY id DESC LIMIT ?
+        """, (user1, user2, user2, user1, limit))
+        rows = c.fetchall()
+        conn.close()
+        return rows[::-1]  # oldest first
 
 # ================= STREAMLIT SETUP =================
 st.set_page_config(page_title="💬 Private Chatbox", layout="wide")
@@ -143,11 +152,12 @@ if st.session_state.logged_in:
         st.experimental_rerun()
 
     # List other users
-    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
-    c = conn.cursor()
-    c.execute("SELECT username FROM users WHERE username != ?", (st.session_state.username,))
-    users = [row[0] for row in c.fetchall()]
-    conn.close()
+    with db_lock:
+        conn = sqlite3.connect("chatbox.db", check_same_thread=False)
+        c = conn.cursor()
+        c.execute("SELECT username FROM users WHERE username != ?", (st.session_state.username,))
+        users = [row[0] for row in c.fetchall()]
+        conn.close()
 
     if not users:
         st.warning("No other users available to chat.")
@@ -169,7 +179,8 @@ if st.session_state.logged_in:
             send_message(st.session_state.username, chat_with, None, msg_type="file", file=uploaded_file)
             st.experimental_rerun()
 
-        # ================= AUTO REFRESH =================
+        # ================= AUTO REFRESH (safe) =================
+        # Only start auto-refresh after chat interface loads
         st_autorefresh(interval=3000, key="chat_refresh")
 
         # ================= CHAT DISPLAY =================
