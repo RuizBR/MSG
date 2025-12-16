@@ -6,7 +6,7 @@ import base64
 
 # ================= DATABASE =================
 def init_db():
-    conn = sqlite3.connect("chatbox.db")
+    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
     c = conn.cursor()
     c.execute("""
         CREATE TABLE IF NOT EXISTS messages (
@@ -24,7 +24,7 @@ def init_db():
 
 
 def add_text_message(user, message):
-    conn = sqlite3.connect("chatbox.db")
+    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
     c = conn.cursor()
     c.execute("""
         INSERT INTO messages (user, message, msg_type, timestamp)
@@ -35,7 +35,7 @@ def add_text_message(user, message):
 
 
 def add_file_message(user, file):
-    conn = sqlite3.connect("chatbox.db")
+    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
     c = conn.cursor()
     c.execute("""
         INSERT INTO messages (user, msg_type, file_name, file_data, timestamp)
@@ -51,20 +51,20 @@ def add_file_message(user, file):
 
 
 def get_messages():
-    conn = sqlite3.connect("chatbox.db")
+    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
     c = conn.cursor()
     c.execute("""
         SELECT user, message, msg_type, file_name, file_data, timestamp
         FROM messages
-        ORDER BY id DESC LIMIT 50
+        ORDER BY id ASC
     """)
     rows = c.fetchall()
     conn.close()
-    return rows[::-1]
+    return rows
 
 
 def clear_messages():
-    conn = sqlite3.connect("chatbox.db")
+    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
     c = conn.cursor()
     c.execute("DELETE FROM messages")
     conn.commit()
@@ -84,7 +84,7 @@ if st.sidebar.button("🗑️ Clear Chat"):
     st.rerun()
 
 st.sidebar.markdown("### 💬 Message")
-message = st.sidebar.text_area(
+st.text_area(
     "",
     placeholder="Type message...",
     height=70,
@@ -105,12 +105,12 @@ def send_file():
     if username and uploaded_file:
         add_file_message(username, uploaded_file)
 
-col1, col2 = st.sidebar.columns(2)
-col1.button("Send", on_click=send_text, use_container_width=True)
-col2.button("Send File", on_click=send_file, use_container_width=True)
+c1, c2 = st.sidebar.columns(2)
+c1.button("Send", on_click=send_text, use_container_width=True)
+c2.button("Send File", on_click=send_file, use_container_width=True)
 
 # ================= AUTO REFRESH =================
-st_autorefresh(interval=5000, key="chat_refresh")
+st_autorefresh(interval=4000, key="chat_refresh")
 
 # ================= CHAT DISPLAY =================
 st.title("💬 Team Chatbox")
@@ -118,35 +118,44 @@ messages = get_messages()
 
 chat_html = """
 <style>
-.chat-container { display:flex; flex-direction:column; }
+.chat-container {
+    display: flex;
+    justify-content: center;
+}
 .chat-box {
-    padding:10px;
-    border:1px solid #ddd;
-    border-radius:10px;
-    background:#fff;
-    font-family:Segoe UI;
+    width: 100%;
+    max-width: 900px;
+    height: 600px;
+    padding: 14px;
+    border: 1px solid #ddd;
+    border-radius: 14px;
+    background: #ffffff;
+    font-family: Segoe UI;
+    overflow-y: auto;
 }
 .message {
-    margin:6px 0;
-    padding:10px 14px;
-    border-radius:16px;
-    max-width:80%;
-    font-size:14px;
+    margin: 6px 0;
+    padding: 10px 14px;
+    border-radius: 18px;
+    max-width: 75%;
+    font-size: 14px;
+    line-height: 1.4;
+    word-wrap: break-word;
 }
 .user {
-    background:#0084ff;
-    color:white;
-    align-self:flex-end;
+    background: #0084ff;
+    color: white;
+    margin-left: auto;
 }
 .other {
-    background:#e5e5ea;
-    color:black;
-    align-self:flex-start;
+    background: #e5e5ea;
+    color: black;
+    margin-right: auto;
 }
 .timestamp {
-    font-size:10px;
-    opacity:0.6;
-    margin-top:4px;
+    font-size: 10px;
+    opacity: 0.6;
+    margin-top: 4px;
 }
 </style>
 
@@ -155,18 +164,16 @@ chat_html = """
 """
 
 for user, msg, mtype, fname, fdata, ts in messages:
-    is_me = user == username
-    cls = "user" if is_me else "other"
+    cls = "user" if user == username else "other"
 
     if mtype == "text":
         content = msg
-
     else:
         if fname.lower().endswith(("png", "jpg", "jpeg")):
             img64 = base64.b64encode(fdata).decode()
             content = f"""
             <img src="data:image/png;base64,{img64}"
-                 style="max-width:250px;border-radius:10px;">
+                 style="max-width:260px;border-radius:12px;">
             """
         else:
             file64 = base64.b64encode(fdata).decode()
@@ -189,19 +196,27 @@ chat_html += """
 <div id="end"></div>
 </div>
 </div>
+
 <script>
-document.getElementById("end").scrollIntoView({behavior:"smooth"});
+const chatBox = document.getElementById("chatBox");
+if (chatBox) {
+    const nearBottom =
+        chatBox.scrollHeight - chatBox.scrollTop - chatBox.clientHeight < 120;
+    if (nearBottom) {
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+}
 </script>
 """
 
-st.components.v1.html(chat_html, height=800, scrolling=False)
+st.components.v1.html(chat_html, height=650, scrolling=False)
 
-# ================= ENTER KEY SEND =================
+# ================= ENTER = SEND =================
 st.markdown("""
 <script>
 const textarea = window.parent.document.querySelector('textarea');
 if (textarea) {
-    textarea.addEventListener('keydown', function(e) {
+    textarea.addEventListener('keydown', e => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             document.querySelector('button').click();
@@ -210,4 +225,3 @@ if (textarea) {
 }
 </script>
 """, unsafe_allow_html=True)
-
