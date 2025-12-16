@@ -127,8 +127,6 @@ def send_message():
     if username and st.session_state.chat_msg.strip():
         add_text_message(username, st.session_state.chat_msg.strip())
         st.session_state.chat_msg = ""  # clear textbox
-        st.experimental_rerun()  # refresh chat display
-
 st.sidebar.button("Send", use_container_width=True, on_click=send_message)
 
 
@@ -240,4 +238,5 @@ if (chatBox) {
 """
 
 st.components.v1.html(chat_html, height=650, scrolling=False)
+
 
