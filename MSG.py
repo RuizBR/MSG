@@ -122,11 +122,15 @@ msg_text = st.sidebar.text_area(
 )
 
 # ---------------- Send button ----------------
-if st.sidebar.button("Send", use_container_width=True):
-    if username and msg_text.strip():
-        add_text_message(username, msg_text.strip())
-        st.session_state.chat_msg = ""
-        st.experimental_rerun()
+# ---------------- Send button ----------------
+def send_message():
+    if username and st.session_state.chat_msg.strip():
+        add_text_message(username, st.session_state.chat_msg.strip())
+        st.session_state.chat_msg = ""  # clear textbox
+        st.experimental_rerun()  # refresh chat display
+
+st.sidebar.button("Send", use_container_width=True, on_click=send_message)
+
 
 # ---------------- File uploader ----------------
 uploaded_file = st.sidebar.file_uploader(
@@ -236,3 +240,4 @@ if (chatBox) {
 """
 
 st.components.v1.html(chat_html, height=650, scrolling=False)
+
