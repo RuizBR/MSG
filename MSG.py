@@ -139,7 +139,6 @@ uploaded_file = st.sidebar.file_uploader(
 if st.sidebar.button("Send File"):
     if username and uploaded_file:
         add_file_message(username, uploaded_file)
-        st.experimental_rerun()
 
 # ================= AUTO REFRESH =================
 st_autorefresh(interval=1000, key="chat_refresh")
@@ -238,6 +237,7 @@ if (chatBox) {
 """
 
 st.components.v1.html(chat_html, height=650, scrolling=False)
+
 
 
 
