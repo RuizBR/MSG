@@ -9,10 +9,10 @@ import threading
 # ================= THREAD LOCK =================
 db_lock = threading.Lock()
 
-# ================= DATABASE =================
-def init_db():
+# ================= DATABASE INITIALIZATION =================
+def init_login_db():
     with db_lock:
-        conn = sqlite3.connect("chatbox.db", check_same_thread=False)
+        conn = sqlite3.connect("login.db", check_same_thread=False)
         c = conn.cursor()
         c.execute("""
             CREATE TABLE IF NOT EXISTS users (
@@ -21,6 +21,13 @@ def init_db():
                 password TEXT
             )
         """)
+        conn.commit()
+        conn.close()
+
+def init_chat_db():
+    with db_lock:
+        conn = sqlite3.connect("chat.db", check_same_thread=False)
+        c = conn.cursor()
         c.execute("""
             CREATE TABLE IF NOT EXISTS messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,7 +43,8 @@ def init_db():
         conn.commit()
         conn.close()
 
-init_db()
+init_login_db()
+init_chat_db()
 
 # ================= AUTH FUNCTIONS =================
 def hash_password(password):
@@ -44,7 +52,7 @@ def hash_password(password):
 
 def register_user(username, password):
     with db_lock:
-        conn = sqlite3.connect("chatbox.db", check_same_thread=False)
+        conn = sqlite3.connect("login.db", check_same_thread=False)
         c = conn.cursor()
         try:
             c.execute("INSERT INTO users (username, password) VALUES (?, ?)", 
@@ -58,7 +66,7 @@ def register_user(username, password):
 
 def login_user(username, password):
     with db_lock:
-        conn = sqlite3.connect("chatbox.db", check_same_thread=False)
+        conn = sqlite3.connect("login.db", check_same_thread=False)
         c = conn.cursor()
         c.execute("SELECT password FROM users WHERE username = ?", (username,))
         result = c.fetchone()
@@ -68,7 +76,7 @@ def login_user(username, password):
 # ================= MESSAGE FUNCTIONS =================
 def send_message(sender, receiver, message, msg_type="text", file=None):
     with db_lock:
-        conn = sqlite3.connect("chatbox.db", check_same_thread=False)
+        conn = sqlite3.connect("chat.db", check_same_thread=False)
         c = conn.cursor()
         if msg_type == "text":
             c.execute("""
@@ -86,7 +94,7 @@ def send_message(sender, receiver, message, msg_type="text", file=None):
 
 def get_conversation(user1, user2, limit=50):
     with db_lock:
-        conn = sqlite3.connect("chatbox.db", check_same_thread=False)
+        conn = sqlite3.connect("chat.db", check_same_thread=False)
         c = conn.cursor()
         c.execute("""
             SELECT sender, message, msg_type, file_name, file_data, timestamp
@@ -151,9 +159,9 @@ if st.session_state.logged_in:
             del st.session_state['chat_msg']
         st.experimental_rerun()
 
-    # List other users
+    # List other users from login.db
     with db_lock:
-        conn = sqlite3.connect("chatbox.db", check_same_thread=False)
+        conn = sqlite3.connect("login.db", check_same_thread=False)
         c = conn.cursor()
         c.execute("SELECT username FROM users WHERE username != ?", (st.session_state.username,))
         users = [row[0] for row in c.fetchall()]
@@ -179,8 +187,7 @@ if st.session_state.logged_in:
             send_message(st.session_state.username, chat_with, None, msg_type="file", file=uploaded_file)
             st.experimental_rerun()
 
-        # ================= AUTO REFRESH (safe) =================
-        # Only start auto-refresh after chat interface loads
+        # ================= AUTO REFRESH =================
         st_autorefresh(interval=3000, key="chat_refresh")
 
         # ================= CHAT DISPLAY =================
