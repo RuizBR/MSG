@@ -136,31 +136,50 @@ c1, c2 = st.sidebar.columns(2)
 c1.button("Send", on_click=send_text, use_container_width=True)
 c2.button("Send File", on_click=send_file, use_container_width=True)
 
-# ================= AUTO REFRESH =================
-# Only refresh chat messages
+# ================= AUTO REFRESH CHAT =================
 st_autorefresh(interval=4000, key="chat_refresh")
 
-# ================= VIDEO CALL =================
+# ================= VIDEO CALL EMBEDDED =================
 st.title("💬 Team Chatbox")
 
-# Check video call status
 room_name, started = get_video_call_status()
+
+# Initialize session_state for iframe
+if "video_call_url" not in st.session_state:
+    st.session_state.video_call_url = ""
 
 if started == 0:
     if st.button("📹 Start Video Call"):
         # Generate random room name
         room_name = "TeamChat_" + ''.join(random.choices(string.ascii_letters + string.digits, k=6))
         start_video_call(room_name)
-        # Open the room in a new tab
-        js = f"window.open('https://meet.jit.si/{room_name}', '_blank')"
-        st.components.v1.html(f"<script>{js}</script>", height=0)
+        st.session_state.video_call_url = f"https://meet.jit.si/{room_name}"
+        st.experimental_rerun()
 else:
-    st.markdown(f"### 📹 Video Call Active: Room `{room_name}`")
-    st.markdown(
-        f"[Join Video Call in New Tab](https://meet.jit.si/{room_name})",
-        unsafe_allow_html=True
-    )
-    st.info(f"Click the link to join the video call in a new tab.")
+    if st.session_state.video_call_url == "":
+        st.session_state.video_call_url = f"https://meet.jit.si/{room_name}"
+
+    # Embed persistent video call iframe
+    st.markdown(f"""
+        <iframe 
+            src="{st.session_state.video_call_url}" 
+            style="width:100%; height:400px; border:0;" 
+            allow="camera; microphone; fullscreen; display-capture">
+        </iframe>
+    """, unsafe_allow_html=True)
+
+    st.info("Video call is active. Click 'End Call' to finish for everyone.")
+
+    # End call button
+    if st.button("🛑 End Call"):
+        conn = sqlite3.connect("chatbox.db", check_same_thread=False)
+        c = conn.cursor()
+        c.execute("UPDATE video_call SET started = 0, room_name = '' WHERE id = 1")
+        conn.commit()
+        conn.close()
+        st.session_state.video_call_url = ""
+        st.warning("The video call has ended for all users.")
+        st.experimental_rerun()
 
 # ================= CHAT DISPLAY =================
 messages = get_messages()
