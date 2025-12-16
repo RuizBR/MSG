@@ -200,11 +200,23 @@ chat_html += """
 <script>
 const chatBox = document.getElementById("chatBox");
 if (chatBox) {
-    const nearBottom =
-        chatBox.scrollHeight - chatBox.scrollTop - chatBox.clientHeight < 120;
-    if (nearBottom) {
+    // Scroll to bottom on load
+    chatBox.scrollTop = chatBox.scrollHeight;
+
+    // Detect if user manually scrolls up
+    let isUserScrolling = false;
+    chatBox.addEventListener('scroll', () => {
+        const nearBottom = chatBox.scrollHeight - chatBox.scrollTop - chatBox.clientHeight < 50;
+        isUserScrolling = !nearBottom;
+    });
+
+    // Auto-scroll when new messages added
+    const observer = new MutationObserver(() => {
+        if (!isUserScrolling) return;
         chatBox.scrollTop = chatBox.scrollHeight;
-    }
+    });
+
+    observer.observe(chatBox, { childList: true, subtree: true });
 }
 </script>
 """
@@ -225,4 +237,3 @@ if (textarea) {
 }
 </script>
 """, unsafe_allow_html=True)
-
