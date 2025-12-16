@@ -142,7 +142,7 @@ if st.sidebar.button("Send File"):
         st.experimental_rerun()
 
 # ================= AUTO REFRESH =================
-st_autorefresh(interval=3000, key="chat_refresh")
+st_autorefresh(interval=1000, key="chat_refresh")
 
 # ================= VIDEO CALL =================
 st.title("💬 Team Chatbox")
@@ -238,5 +238,6 @@ if (chatBox) {
 """
 
 st.components.v1.html(chat_html, height=650, scrolling=False)
+
 
 
