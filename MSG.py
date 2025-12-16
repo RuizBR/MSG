@@ -153,11 +153,13 @@ if started == 0:
         start_video_call(room_name)
         st.experimental_rerun()
 else:
-    # Call is active: show iframe to all users
+    # Call is active: show iframe to all users with camera & mic access
     st.markdown(f"### 📹 Video Call Active: Room `{room_name}`")
     st.markdown(f"""
-        <iframe src="https://meet.jit.si/{room_name}" 
-                style="width:100%; height:400px; border:0;">
+        <iframe 
+            src="https://meet.jit.si/{room_name}" 
+            style="width:100%; height:400px; border:0;"
+            allow="camera; microphone; fullscreen; display-capture">
         </iframe>
     """, unsafe_allow_html=True)
     st.info(f"Join the video call in room: {room_name}")
