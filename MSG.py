@@ -83,10 +83,31 @@ if st.sidebar.button("🗑️ Clear Chat"):
     clear_messages()
     st.rerun()
 
+st.sidebar.markdown("### 💬 Message")
+st.text_area(
+    "",
+    placeholder="Type message...",
+    height=70,
+    key="chat_msg"
+)
+
 uploaded_file = st.sidebar.file_uploader(
     "📎 Attach image or file",
     type=["png", "jpg", "jpeg", "pdf", "docx"]
 )
+
+def send_text():
+    if username and st.session_state.chat_msg.strip():
+        add_text_message(username, st.session_state.chat_msg.strip())
+        st.session_state.chat_msg = ""
+
+def send_file():
+    if username and uploaded_file:
+        add_file_message(username, uploaded_file)
+
+c1, c2 = st.sidebar.columns(2)
+c1.button("Send", on_click=send_text, use_container_width=True)
+c2.button("Send File", on_click=send_file, use_container_width=True)
 
 # ================= AUTO REFRESH =================
 st_autorefresh(interval=4000, key="chat_refresh")
@@ -97,14 +118,14 @@ messages = get_messages()
 
 chat_html = """
 <style>
-.chat-wrapper {
+.chat-container {
     display: flex;
     justify-content: center;
 }
 .chat-box {
     width: 100%;
     max-width: 900px;
-    height: 550px;
+    height: 600px;
     padding: 14px;
     border: 1px solid #ddd;
     border-radius: 14px;
@@ -119,6 +140,7 @@ chat_html = """
     max-width: 75%;
     font-size: 14px;
     line-height: 1.4;
+    word-wrap: break-word;
 }
 .user {
     background: #0084ff;
@@ -137,7 +159,7 @@ chat_html = """
 }
 </style>
 
-<div class="chat-wrapper">
+<div class="chat-container">
 <div class="chat-box" id="chatBox">
 """
 
@@ -171,6 +193,7 @@ for user, msg, mtype, fname, fdata, ts in messages:
     """
 
 chat_html += """
+<div id="end"></div>
 </div>
 </div>
 
@@ -186,35 +209,15 @@ if (chatBox) {
 </script>
 """
 
-st.components.v1.html(chat_html, height=600, scrolling=False)
-
-# ================= FIXED INPUT BAR =================
-st.markdown("<hr>", unsafe_allow_html=True)
-
-input_col, send_col = st.columns([6, 1])
-
-with input_col:
-    st.text_input(
-        "",
-        placeholder="Type a message...",
-        key="chat_msg",
-        label_visibility="collapsed"
-    )
-
-with send_col:
-    if st.button("Send", use_container_width=True):
-        if username and st.session_state.chat_msg.strip():
-            add_text_message(username, st.session_state.chat_msg.strip())
-            st.session_state.chat_msg = ""
-            st.rerun()
+st.components.v1.html(chat_html, height=650, scrolling=False)
 
 # ================= ENTER = SEND =================
 st.markdown("""
 <script>
-const input = window.parent.document.querySelector('input');
-if (input) {
-    input.addEventListener('keydown', e => {
-        if (e.key === 'Enter') {
+const textarea = window.parent.document.querySelector('textarea');
+if (textarea) {
+    textarea.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             document.querySelector('button').click();
         }
@@ -222,3 +225,4 @@ if (input) {
 }
 </script>
 """, unsafe_allow_html=True)
+
