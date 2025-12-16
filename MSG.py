@@ -133,11 +133,21 @@ chat_html = """
     font-family: Segoe UI;
     overflow-y: auto;
 }
-.message {
+.message-wrapper {
+    display: flex;
+    align-items: flex-start;
     margin: 6px 0;
+}
+.message-wrapper.right {
+    justify-content: flex-end;
+}
+.message-wrapper.left {
+    justify-content: flex-start;
+}
+.message {
     padding: 10px 14px;
     border-radius: 18px;
-    max-width: 75%;
+    max-width: 65%;
     font-size: 14px;
     line-height: 1.4;
     word-wrap: break-word;
@@ -145,17 +155,31 @@ chat_html = """
 .user {
     background: #0084ff;
     color: white;
-    margin-left: auto;
+    border-bottom-right-radius: 0;
 }
 .other {
     background: #e5e5ea;
     color: black;
-    margin-right: auto;
+    border-bottom-left-radius: 0;
 }
 .timestamp {
     font-size: 10px;
     opacity: 0.6;
     margin-top: 4px;
+    text-align: right;
+}
+.user-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #ccc;
+    color: white;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 8px;
+    flex-shrink: 0;
 }
 </style>
 
@@ -164,7 +188,10 @@ chat_html = """
 """
 
 for user, msg, mtype, fname, fdata, ts in messages:
-    cls = "user" if user == username else "other"
+    is_me = user == username
+    wrapper_cls = "right" if is_me else "left"
+    msg_cls = "user" if is_me else "other"
+    initials = "".join([x[0] for x in user.split()][:2]).upper()  # User initials
 
     if mtype == "text":
         content = msg
@@ -184,13 +211,28 @@ for user, msg, mtype, fname, fdata, ts in messages:
             </a>
             """
 
-    chat_html += f"""
-    <div class="message {cls}">
-        <b>{user}</b><br>
-        {content}
-        <div class="timestamp">{ts}</div>
-    </div>
-    """
+    if is_me:
+        chat_html += f"""
+        <div class="message-wrapper {wrapper_cls}">
+            <div class="message {msg_cls}">
+                <b>{user}</b><br>
+                {content}
+                <div class="timestamp">{ts}</div>
+            </div>
+            <div class="user-icon">{initials}</div>
+        </div>
+        """
+    else:
+        chat_html += f"""
+        <div class="message-wrapper {wrapper_cls}">
+            <div class="user-icon">{initials}</div>
+            <div class="message {msg_cls}">
+                <b>{user}</b><br>
+                {content}
+                <div class="timestamp">{ts}</div>
+            </div>
+        </div>
+        """
 
 chat_html += """
 <div id="end"></div>
@@ -200,17 +242,14 @@ chat_html += """
 <script>
 const chatBox = document.getElementById("chatBox");
 if (chatBox) {
-    // Scroll to bottom on load
     chatBox.scrollTop = chatBox.scrollHeight;
 
-    // Detect if user manually scrolls up
     let isUserScrolling = false;
     chatBox.addEventListener('scroll', () => {
         const nearBottom = chatBox.scrollHeight - chatBox.scrollTop - chatBox.clientHeight < 50;
         isUserScrolling = !nearBottom;
     });
 
-    // Auto-scroll when new messages added
     const observer = new MutationObserver(() => {
         if (!isUserScrolling) return;
         chatBox.scrollTop = chatBox.scrollHeight;
