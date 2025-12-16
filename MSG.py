@@ -68,10 +68,11 @@ def send_message(sender, receiver, message, msg_type="text", file=None):
             VALUES (?, ?, ?, ?, ?)
         """, (sender, receiver, message, msg_type, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
     elif msg_type == "file" and file:
+        file_data = file.read() if hasattr(file, "read") else file.getvalue()
         c.execute("""
             INSERT INTO messages (sender, receiver, msg_type, file_name, file_data, timestamp)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (sender, receiver, msg_type, file.name, file.getvalue(), datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+        """, (sender, receiver, msg_type, file.name, file_data, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
     conn.commit()
     conn.close()
 
@@ -86,7 +87,7 @@ def get_conversation(user1, user2, limit=50):
     """, (user1, user2, user2, user1, limit))
     rows = c.fetchall()
     conn.close()
-    return rows[::-1]  # reverse to show oldest first
+    return rows[::-1]  # oldest first
 
 # ================= STREAMLIT SETUP =================
 st.set_page_config(page_title="💬 Private Chatbox", layout="wide")
@@ -99,6 +100,8 @@ if 'username_input' not in st.session_state:
     st.session_state.username_input = ""
 if 'password_input' not in st.session_state:
     st.session_state.password_input = ""
+if 'chat_msg' not in st.session_state:
+    st.session_state.chat_msg = ""
 
 # ================= SIDEBAR =================
 st.sidebar.title("💬 Private Chatbox")
@@ -107,12 +110,12 @@ st.sidebar.title("💬 Private Chatbox")
 if not st.session_state.logged_in:
     mode = st.sidebar.radio("Mode", ["Login", "Register"])
     
-    st.session_state.username_input = st.sidebar.text_input("Username", key="username_input")
-    st.session_state.password_input = st.sidebar.text_input("Password", type="password", key="password_input")
+    username_input = st.sidebar.text_input("Username", key="username_input")
+    password_input = st.sidebar.text_input("Password", type="password", key="password_input")
 
     if st.sidebar.button(mode):
-        username_input = st.session_state.username_input.strip()
-        password_input = st.session_state.password_input.strip()
+        username_input = username_input.strip()
+        password_input = password_input.strip()
 
         if username_input and password_input:
             if mode == "Register":
@@ -122,7 +125,6 @@ if not st.session_state.logged_in:
                     st.sidebar.error("Username already exists.")
             elif mode == "Login":
                 if login_user(username_input, password_input):
-                    # ✅ Safe session state setup
                     st.session_state.logged_in = True
                     st.session_state.username = username_input
                     st.experimental_rerun()
@@ -136,9 +138,11 @@ if st.session_state.logged_in:
     if st.sidebar.button("🔓 Logout"):
         st.session_state.logged_in = False
         st.session_state.username = ""
+        if 'chat_msg' in st.session_state:
+            del st.session_state['chat_msg']
         st.experimental_rerun()
 
-    # Users list
+    # List other users
     conn = sqlite3.connect("chatbox.db", check_same_thread=False)
     c = conn.cursor()
     c.execute("SELECT username FROM users WHERE username != ?", (st.session_state.username,))
@@ -153,12 +157,12 @@ if st.session_state.logged_in:
         # Message input
         msg_text = st.text_area("Type your message...", height=60, key="chat_msg")
         send_clicked = st.button("Send")
-
         uploaded_file = st.file_uploader("📎 Attach image or file", type=["png","jpg","jpeg","pdf","docx"])
         send_file_clicked = st.button("Send File")
 
         if send_clicked and msg_text.strip():
             send_message(st.session_state.username, chat_with, msg_text.strip())
+            st.session_state.chat_msg = ""
             st.experimental_rerun()
 
         if send_file_clicked and uploaded_file:
