@@ -142,6 +142,10 @@ st_autorefresh(interval=4000, key="chat_refresh")
 # ================= VIDEO CALL DISPLAY =================
 st.title("💬 Team Chatbox")
 
+# Initialize session state for iframe URL
+if "video_call_url" not in st.session_state:
+    st.session_state.video_call_url = ""
+
 # Check video call status
 room_name, started = get_video_call_status()
 
@@ -151,13 +155,17 @@ if started == 0:
         # Generate random room name
         room_name = "TeamChat_" + ''.join(random.choices(string.ascii_letters + string.digits, k=6))
         start_video_call(room_name)
+        st.session_state.video_call_url = f"https://meet.jit.si/{room_name}"
         st.experimental_rerun()
 else:
-    # Call is active: show iframe to all users with camera & mic access
-    st.markdown(f"### 📹 Video Call Active: Room `{room_name}`")
+    # Only set iframe URL once
+    if st.session_state.video_call_url == "":
+        st.session_state.video_call_url = f"https://meet.jit.si/{room_name}"
+
+    # Display iframe (this won't reload on auto-refresh)
     st.markdown(f"""
         <iframe 
-            src="https://meet.jit.si/{room_name}" 
+            src="{st.session_state.video_call_url}" 
             style="width:100%; height:400px; border:0;"
             allow="camera; microphone; fullscreen; display-capture">
         </iframe>
