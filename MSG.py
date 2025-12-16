@@ -3,8 +3,6 @@ import sqlite3
 from datetime import datetime
 import base64
 import hashlib
-import random
-import string
 from streamlit_autorefresh import st_autorefresh
 
 # ================= DATABASE =================
@@ -34,18 +32,6 @@ def init_db():
             timestamp TEXT
         )
     """)
-    
-    # Video call table (optional)
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS video_call (
-            id INTEGER PRIMARY KEY,
-            room_name TEXT,
-            started INTEGER
-        )
-    """)
-    c.execute("SELECT COUNT(*) FROM video_call")
-    if c.fetchone()[0] == 0:
-        c.execute("INSERT INTO video_call (id, room_name, started) VALUES (1, '', 0)")
     
     conn.commit()
     conn.close()
@@ -104,62 +90,50 @@ def get_conversation(user1, user2):
     conn.close()
     return rows
 
-# ================= VIDEO CALL FUNCTIONS (OPTIONAL) =================
-def start_video_call(room_name):
-    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
-    c = conn.cursor()
-    c.execute("UPDATE video_call SET room_name = ?, started = 1 WHERE id = 1", (room_name,))
-    conn.commit()
-    conn.close()
-
-def end_video_call():
-    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
-    c = conn.cursor()
-    c.execute("UPDATE video_call SET room_name = '', started = 0 WHERE id = 1")
-    conn.commit()
-    conn.close()
-
-def get_video_call_status():
-    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
-    c = conn.cursor()
-    c.execute("SELECT room_name, started FROM video_call WHERE id = 1")
-    row = c.fetchone()
-    conn.close()
-    return row
-
 # ================= STREAMLIT SETUP =================
 st.set_page_config(page_title="💬 Private Chatbox", layout="wide")
 
+# ================= SESSION STATE =================
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.username = ""
 
-# ================= LOGIN / REGISTER =================
-st.sidebar.title("🔐 Login / Register")
-mode = st.sidebar.radio("Mode", ["Login", "Register"])
-username_input = st.sidebar.text_input("Username")
-password_input = st.sidebar.text_input("Password", type="password")
+# ================= SIDEBAR =================
+st.sidebar.title("💬 Private Chatbox")
 
-if st.sidebar.button(mode):
-    if username_input and password_input:
-        if mode == "Register":
-            if register_user(username_input, password_input):
-                st.sidebar.success("Registered successfully! You can now login.")
-            else:
-                st.sidebar.error("Username already exists.")
-        elif mode == "Login":
-            if login_user(username_input, password_input):
-                st.session_state.logged_in = True
-                st.session_state.username = username_input
-                st.experimental_rerun()
-            else:
-                st.sidebar.error("Invalid username or password.")
+# ---------------- LOGOUT ----------------
+if st.session_state.logged_in:
+    if st.sidebar.button("🔓 Logout"):
+        st.session_state.logged_in = False
+        st.session_state.username = ""
+        st.experimental_rerun()
 
-# ================= MAIN CHAT =================
+# ---------------- LOGIN / REGISTER ----------------
+if not st.session_state.logged_in:
+    mode = st.sidebar.radio("Mode", ["Login", "Register"])
+    username_input = st.sidebar.text_input("Username")
+    password_input = st.sidebar.text_input("Password", type="password")
+
+    if st.sidebar.button(mode):
+        if username_input and password_input:
+            if mode == "Register":
+                if register_user(username_input, password_input):
+                    st.sidebar.success("Registered successfully! You can now login.")
+                else:
+                    st.sidebar.error("Username already exists.")
+            elif mode == "Login":
+                if login_user(username_input, password_input):
+                    st.session_state.logged_in = True
+                    st.session_state.username = username_input
+                    st.experimental_rerun()
+                else:
+                    st.sidebar.error("Invalid username or password.")
+
+# ---------------- CHAT INTERFACE ----------------
 if st.session_state.logged_in:
     st.sidebar.info(f"Logged in as: {st.session_state.username}")
     
-    # Select user to chat with
+    # List users to chat with
     conn = sqlite3.connect("chatbox.db", check_same_thread=False)
     c = conn.cursor()
     c.execute("SELECT username FROM users WHERE username != ?", (st.session_state.username,))
@@ -171,7 +145,7 @@ if st.session_state.logged_in:
     else:
         chat_with = st.sidebar.selectbox("Chat with:", users)
         
-        # Textbox and Send button
+        # Textbox
         msg_text = st.sidebar.text_area("", height=60, key="chat_msg")
         if st.sidebar.button("Send"):
             if msg_text.strip():
