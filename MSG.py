@@ -97,8 +97,6 @@ st.set_page_config(page_title="💬 Private Chatbox", layout="wide")
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.username = ""
-if 'just_logged_in' not in st.session_state:
-    st.session_state.just_logged_in = False
 
 # ================= SIDEBAR =================
 st.sidebar.title("💬 Private Chatbox")
@@ -127,14 +125,9 @@ if not st.session_state.logged_in:
                 if login_user(username_input, password_input):
                     st.session_state.logged_in = True
                     st.session_state.username = username_input
-                    st.session_state.just_logged_in = True  # trigger next run safely
+                    st.experimental_rerun()
                 else:
                     st.sidebar.error("Invalid username or password.")
-
-# ---------------- AFTER LOGIN SAFE ----------------
-if st.session_state.get("just_logged_in", False):
-    st.session_state.just_logged_in = False  # reset flag
-    st.experimental_rerun()  # safe rerun after session state update
 
 # ---------------- CHAT INTERFACE ----------------
 if st.session_state.logged_in:
@@ -152,14 +145,14 @@ if st.session_state.logged_in:
     else:
         chat_with = st.sidebar.selectbox("Chat with:", users)
         
-        # Textbox + Send button under
+        # Textbox
         msg_text = st.sidebar.text_area("", height=60, key="chat_msg")
         if st.sidebar.button("Send"):
             if msg_text.strip():
                 send_message(st.session_state.username, chat_with, msg_text.strip())
                 st.experimental_rerun()
         
-        # File uploader + Send File
+        # File uploader
         uploaded_file = st.sidebar.file_uploader("📎 Attach image or file", type=["png","jpg","jpeg","pdf","docx"])
         if st.sidebar.button("Send File"):
             if uploaded_file:
