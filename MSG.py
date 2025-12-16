@@ -118,11 +118,21 @@ st_autorefresh(interval=4000, key="chat_refresh")
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 📹 Video Call")
 
-# Generate a random room name per app session for multi-user call
-if 'jitsi_room' not in st.session_state:
-    st.session_state.jitsi_room = 'TeamChat_' + ''.join(random.choices(string.ascii_letters + string.digits, k=6))
+# Persistent video call state
+if "video_call_started" not in st.session_state:
+    st.session_state.video_call_started = False
 
+if "jitsi_room" not in st.session_state:
+    st.session_state.jitsi_room = "TeamChat_" + "".join(
+        random.choices(string.ascii_letters + string.digits, k=6)
+    )
+
+# Button to start video call
 if st.sidebar.button("Start Video Call"):
+    st.session_state.video_call_started = True
+
+# Show video call iframe if started
+if st.session_state.video_call_started:
     room_name = st.session_state.jitsi_room
     st.sidebar.markdown(f"""
     <iframe src="https://meet.jit.si/{room_name}" 
@@ -137,10 +147,7 @@ messages = get_messages()
 
 chat_html = """
 <style>
-.chat-container {
-    display: flex;
-    justify-content: center;
-}
+.chat-container { display: flex; justify-content: center; }
 .chat-box {
     width: 100%;
     max-width: 900px;
@@ -152,54 +159,14 @@ chat_html = """
     font-family: Segoe UI;
     overflow-y: auto;
 }
-.message-wrapper {
-    display: flex;
-    align-items: flex-start;
-    margin: 6px 0;
-}
-.message-wrapper.right {
-    justify-content: flex-end;
-}
-.message-wrapper.left {
-    justify-content: flex-start;
-}
-.message {
-    padding: 10px 14px;
-    border-radius: 18px;
-    max-width: 65%;
-    font-size: 14px;
-    line-height: 1.4;
-    word-wrap: break-word;
-}
-.user {
-    background: #0084ff;
-    color: white;
-    border-bottom-right-radius: 0;
-}
-.other {
-    background: #e5e5ea;
-    color: black;
-    border-bottom-left-radius: 0;
-}
-.timestamp {
-    font-size: 10px;
-    opacity: 0.6;
-    margin-top: 4px;
-    text-align: right;
-}
-.user-icon {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background: #ccc;
-    color: white;
-    font-weight: bold;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 8px;
-    flex-shrink: 0;
-}
+.message-wrapper { display: flex; align-items: flex-start; margin: 6px 0; }
+.message-wrapper.right { justify-content: flex-end; }
+.message-wrapper.left { justify-content: flex-start; }
+.message { padding: 10px 14px; border-radius: 18px; max-width: 65%; font-size: 14px; line-height: 1.4; word-wrap: break-word; }
+.user { background: #0084ff; color: white; border-bottom-right-radius: 0; }
+.other { background: #e5e5ea; color: black; border-bottom-left-radius: 0; }
+.timestamp { font-size: 10px; opacity: 0.6; margin-top: 4px; text-align: right; }
+.user-icon { width: 32px; height: 32px; border-radius: 50%; background: #ccc; color: white; font-weight: bold; display: flex; align-items: center; justify-content: center; margin: 0 8px; flex-shrink: 0; }
 </style>
 
 <div class="chat-container">
@@ -217,25 +184,16 @@ for user, msg, mtype, fname, fdata, ts in messages:
     else:
         if fname.lower().endswith(("png", "jpg", "jpeg")):
             img64 = base64.b64encode(fdata).decode()
-            content = f"""
-            <img src="data:image/png;base64,{img64}"
-                 style="max-width:260px;border-radius:12px;">
-            """
+            content = f'<img src="data:image/png;base64,{img64}" style="max-width:260px;border-radius:12px;">'
         else:
             file64 = base64.b64encode(fdata).decode()
-            content = f"""
-            <a download="{fname}"
-               href="data:application/octet-stream;base64,{file64}">
-               📎 {fname}
-            </a>
-            """
+            content = f'<a download="{fname}" href="data:application/octet-stream;base64,{file64}">📎 {fname}</a>'
 
     if is_me:
         chat_html += f"""
         <div class="message-wrapper {wrapper_cls}">
             <div class="message {msg_cls}">
-                <b>{user}</b><br>
-                {content}
+                <b>{user}</b><br>{content}
                 <div class="timestamp">{ts}</div>
             </div>
             <div class="user-icon">{initials}</div>
@@ -246,8 +204,7 @@ for user, msg, mtype, fname, fdata, ts in messages:
         <div class="message-wrapper {wrapper_cls}">
             <div class="user-icon">{initials}</div>
             <div class="message {msg_cls}">
-                <b>{user}</b><br>
-                {content}
+                <b>{user}</b><br>{content}
                 <div class="timestamp">{ts}</div>
             </div>
         </div>
