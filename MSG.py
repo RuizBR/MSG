@@ -10,7 +10,6 @@ import string
 def init_db():
     conn = sqlite3.connect("chatbox.db", check_same_thread=False)
     c = conn.cursor()
-    # Messages table
     c.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -22,7 +21,6 @@ def init_db():
             timestamp TEXT
         )
     """)
-    # Video call table
     c.execute("""
         CREATE TABLE IF NOT EXISTS video_call (
             id INTEGER PRIMARY KEY,
@@ -53,12 +51,7 @@ def add_file_message(user, file):
     c.execute("""
         INSERT INTO messages (user, msg_type, file_name, file_data, timestamp)
         VALUES (?, 'file', ?, ?, ?)
-    """, (
-        user,
-        file.name,
-        file.getvalue(),
-        datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    ))
+    """, (user, file.name, file.getvalue(), datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
     conn.commit()
     conn.close()
 
@@ -118,25 +111,22 @@ if st.sidebar.button("🗑️ Clear Chat"):
 
 st.sidebar.markdown("### 💬 Message")
 
-# ---------------- Textbox + Send button in one row ----------------
-col_msg, col_send = st.sidebar.columns([4,1])
+# ---------------- Textbox ----------------
+msg_text = st.sidebar.text_area(
+    "",
+    height=60,
+    key="chat_msg",
+    placeholder="Type message..."
+)
 
-with col_msg:
-    msg_text = st.text_area(
-        "",
-        height=60,
-        key="chat_msg",
-        placeholder="Type message..."
-    )
+# ---------------- Send button under textbox ----------------
+if st.sidebar.button("Send", use_container_width=True):
+    if username and msg_text.strip():
+        add_text_message(username, msg_text.strip())
+        st.session_state.chat_msg = ""
+        st.experimental_rerun()
 
-with col_send:
-    if st.button("Send", use_container_width=True):
-        if username and st.session_state.chat_msg.strip():
-            add_text_message(username, st.session_state.chat_msg.strip())
-            st.session_state.chat_msg = ""
-            st.experimental_rerun()
-
-# File uploader below the textbox row
+# ---------------- File uploader ----------------
 uploaded_file = st.sidebar.file_uploader(
     "📎 Attach image or file",
     type=["png", "jpg", "jpeg", "pdf", "docx"]
