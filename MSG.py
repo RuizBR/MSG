@@ -203,7 +203,7 @@ def get_messages(username):
 
 # ================= STREAMLIT CONFIG =================
 st.set_page_config(page_title="💬 Team Chatbox", layout="wide")
-st_autorefresh(interval=2000, key="refresh")
+st_autorefresh(interval=5000, key="refresh")
 
 # ================= LOGIN / REGISTER =================
 if "logged_in" not in st.session_state:
@@ -338,4 +338,5 @@ else:
     }
     </script>
     """, unsafe_allow_html=True)
+
 
