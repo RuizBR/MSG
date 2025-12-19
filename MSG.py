@@ -144,7 +144,7 @@ st_autorefresh(interval=5000, limit=None, key="chat_refresh")
 init_db()
 
 # ================= VIDEO CALL =================
-#st.title("💬 Team Chatbox")
+st.title("💬 Team Chatbox")
 room_name, started = get_video_call_status()
 
 if started == 0:
