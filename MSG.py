@@ -58,7 +58,7 @@ def login_user_db(username, password):
 init_users_db()
 
 # ================= CHAT DB =================
-CHAT_DB = "chat.db"
+CHAT_DB = "chat_fixed.db"  # new clean DB
 
 def init_chat_db():
     conn = sqlite3.connect(CHAT_DB, check_same_thread=False)
@@ -93,7 +93,7 @@ def init_chat_db():
 
 init_chat_db()
 
-# ================= ROBUST DB FUNCTIONS =================
+# ================= DB FUNCTIONS =================
 def execute_db_write(db, query, params=(), retries=10, delay=0.2):
     while retries > 0:
         try:
@@ -266,10 +266,6 @@ if st.session_state.logged_in:
             add_text_message(username, msg_text, recipient_db)
             st.session_state.chat_input = ""
             remove_typing(username)
-            # append to local_messages to display instantly
-            st.session_state.local_messages.append(
-                (username, recipient_db, msg_text, "text", None, None, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-            )
 
     st.sidebar.button("Send", on_click=send, use_container_width=True)
 
@@ -283,9 +279,6 @@ if st.session_state.logged_in:
             recipient_db = None if recipient == "All (public)" else recipient
             add_file_message(username, file, recipient_db)
             remove_typing(username)
-            st.session_state.local_messages.append(
-                (username, recipient_db, None, "file", file.name, file.getvalue(), datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-            )
 
 # ================= DISPLAY CHAT =================
 st.title("💬 Team Chatbox")
@@ -293,20 +286,16 @@ st.title("💬 Team Chatbox")
 if not st.session_state.logged_in:
     st.info("🔒 Please login to chat.")
 else:
-    # Combine DB messages with local messages for immediate display
-    msgs = get_messages(username) + st.session_state.local_messages
+    msgs = get_messages(username)
     typing = [u for u in get_typing_users() if u != username]
 
     if typing:
         st.caption("✍️ " + ", ".join(typing) + " typing…")
 
     for u, r, m, t, f, fd, ts in msgs:
-        # Show message if:
-        # 1) Public, or
-        # 2) Sent to me, or
-        # 3) I sent it
+        # Display logic for public and private messages
         if r and r not in (username, '') and u != username:
-            continue
+            continue  # skip messages not meant for me
 
         me = u == username
         bg = "#0084ff" if me else "#e5e5ea"
