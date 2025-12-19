@@ -186,13 +186,14 @@ def get_typing_users(timeout=4):
     rows = execute_db_read(CHAT_DB, query, (now, timeout))
     return [r[0] for r in rows] if rows else []
 
+# ================= FIXED: GET MESSAGES =================
 def get_messages(username):
     query = """
         SELECT user, recipient, message, msg_type, file_name, file_data, timestamp
         FROM messages
-        WHERE recipient IS NULL OR recipient = ''       -- public messages
-           OR recipient = ?                              -- messages sent to me
-           OR user = ?                                   -- messages I sent
+        WHERE recipient IS NULL OR recipient = ''              -- public messages
+           OR recipient = ?                                     -- private messages sent to me
+           OR (user = ? AND recipient IS NOT NULL)             -- private messages I sent
         ORDER BY id
     """
     rows = execute_db_read(CHAT_DB, query, (username, username))
@@ -292,7 +293,7 @@ else:
     if typing:
         st.caption("✍️ " + ", ".join(typing) + " typing…")
 
-    # Display only messages based on selection
+    # Display messages strictly based on “Send To”
     if recipient == "All (public)":
         st.subheader("🌐 Public Chat")
         display_msgs = [msg for msg in msgs if msg[1] in (None, '')]
