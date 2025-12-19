@@ -60,6 +60,7 @@ CHAT_DB = "chat_fixed.db"
 def init_chat_db():
     conn = sqlite3.connect(CHAT_DB, check_same_thread=False)
     cur = conn.cursor()
+    # Messages
     cur.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -72,6 +73,7 @@ def init_chat_db():
             timestamp TEXT
         )
     """)
+    # Active users
     cur.execute("""
         CREATE TABLE IF NOT EXISTS active_users (
             session_id TEXT PRIMARY KEY,
@@ -79,6 +81,7 @@ def init_chat_db():
             last_seen INTEGER
         )
     """)
+    # Typing users
     cur.execute("""
         CREATE TABLE IF NOT EXISTS typing_users (
             username TEXT PRIMARY KEY,
@@ -89,6 +92,24 @@ def init_chat_db():
     conn.close()
 
 init_chat_db()
+
+# ================= VIDEO CALL DB =================
+def init_video_call_db():
+    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
+    c = conn.cursor()
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS video_call (
+            id INTEGER PRIMARY KEY,
+            room_name TEXT,
+            started INTEGER
+        )
+    """)
+    # Ensure a single row exists
+    c.execute("INSERT OR IGNORE INTO video_call (id, room_name, started) VALUES (1, '', 0)")
+    conn.commit()
+    conn.close()
+
+init_video_call_db()
 
 # ================= DB FUNCTIONS =================
 def execute_db_write(db, query, params=(), retries=10, delay=0.2):
@@ -209,6 +230,31 @@ def clear_messages(username, recipient=None):
             "DELETE FROM messages WHERE (user=? AND recipient=?) OR (user=? AND recipient=?)",
             (username, recipient, recipient, username)
         )
+
+# ================= VIDEO CALL FUNCTIONS =================
+def start_video_call(room_name):
+    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
+    c = conn.cursor()
+    c.execute("UPDATE video_call SET room_name = ?, started = 1 WHERE id = 1", (room_name,))
+    conn.commit()
+    conn.close()
+
+def end_video_call():
+    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
+    c = conn.cursor()
+    c.execute("UPDATE video_call SET room_name = '', started = 0 WHERE id = 1")
+    conn.commit()
+    conn.close()
+
+def get_video_call_status():
+    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
+    c = conn.cursor()
+    c.execute("SELECT room_name, started FROM video_call WHERE id = 1")
+    row = c.fetchone()
+    conn.close()
+    if row:
+        return row[0], row[1]
+    return '', 0
 
 # ================= STREAMLIT CONFIG =================
 st.set_page_config(page_title="💬 Team Chatbox", layout="wide")
@@ -372,3 +418,23 @@ else:
     }
     </script>
     """, unsafe_allow_html=True)
+
+# ================= VIDEO CALL =================
+st.markdown("---")
+st.subheader("📹 Video Call")
+
+room_name, started = get_video_call_status()
+
+if started == 0:
+    if st.button("Start Video Call"):
+        room_name = "TeamChat_" + ''.join(random.choices(string.ascii_letters + string.digits, k=6))
+        start_video_call(room_name)
+        js = f"window.open('https://meet.jit.si/{room_name}', '_blank')"
+        st.components.v1.html(f"<script>{js}</script>", height=0)
+else:
+    st.markdown(f"### Video Call Active: Room `{room_name}`")
+    st.markdown(f"[Join Video Call in New Tab](https://meet.jit.si/{room_name})", unsafe_allow_html=True)
+    st.info("Click the link to join the video call in a new tab.")
+    if st.button("End Video Call"):
+        end_video_call()
+        st.experimental_rerun()
