@@ -158,8 +158,7 @@ online_users = get_online_user_count()
 
 st.sidebar.markdown(
     f"""
-    <div style="text-align:center; padding:8px; border-radius:10px;
-                background:#f0f2f6; margin-bottom:6px;">
+    <div style="text-align:center; padding:8px; border-radius:10px; margin-bottom:6px;">
         🟢 <b style="font-size:18px;">{online_users}</b>
         <span style="font-size:8px;">Users Online</span>
     </div>
@@ -267,4 +266,5 @@ box.scrollTop = box.scrollHeight;
 """
 
 st.components.v1.html(chat_html, height=650)
+
 
