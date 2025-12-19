@@ -188,9 +188,18 @@ def get_messages(username):
     rows = execute_db_read(query, (username, username))
     return rows if rows else []
 
-# ================= STREAMLIT =================
+# ================= STREAMLIT CONFIG =================
 st.set_page_config(page_title="💬 Team Chatbox", layout="wide")
-st_autorefresh(interval=3000, key="refresh")
+
+# ================= AUTOREFRESH SAFE =================
+if "just_sent" not in st.session_state:
+    st.session_state.just_sent = False
+
+# Only autorefresh if a message wasn't just sent
+if not st.session_state.just_sent:
+    st_autorefresh(interval=3000, key="refresh")
+else:
+    st.session_state.just_sent = False  # reset after rerun
 
 # ================= LOGIN / REGISTER =================
 if "logged_in" not in st.session_state:
@@ -236,30 +245,45 @@ if st.session_state.logged_in:
         ["All (public)"] + [u for u in online_list if u != username]
     )
 
-    msg = st.sidebar.text_area("", key="chat_input", placeholder="Type a message...")
+    # ================= CHAT INPUT (SIDEBAR) =================
+    chat_input = st.sidebar.text_area(
+        "", key="chat_input", placeholder="Type a message...", height=50
+    )
 
-    # Typing logic
-    if st.session_state["chat_input"].strip():
+    if st.session_state.chat_input.strip():
         set_typing(username)
     else:
         remove_typing(username)
 
     def send():
-        if st.session_state["chat_input"].strip():
-            add_text_message(username, st.session_state["chat_input"].strip(),
-                             None if recipient=="All (public)" else recipient)
-            st.session_state["chat_input"] = ""
-            remove_typing(username)  # remove typing after sending
+        if st.session_state.chat_input.strip():
+            add_text_message(
+                username,
+                st.session_state.chat_input.strip(),
+                None if recipient == "All (public)" else recipient
+            )
+            st.session_state.chat_input = ""
+            remove_typing(username)
+            st.session_state.just_sent = True
+            st.experimental_rerun()
 
     st.sidebar.button("Send", on_click=send, use_container_width=True)
 
-    file = st.sidebar.file_uploader("📎 Attach file",
-        type=["png","jpg","jpeg","pdf","docx"])
+    # File upload
+    file = st.sidebar.file_uploader(
+        "📎 Attach file",
+        type=["png","jpg","jpeg","pdf","docx"]
+    )
     if st.sidebar.button("Send File"):
         if file:
-            add_file_message(username, file,
-                             None if recipient=="All (public)" else recipient)
+            add_file_message(
+                username,
+                file,
+                None if recipient == "All (public)" else recipient
+            )
             remove_typing(username)
+            st.session_state.just_sent = True
+            st.experimental_rerun()
 
 # ================= DISPLAY CHAT =================
 st.title("💬 Team Chatbox")
@@ -274,7 +298,6 @@ else:
         st.caption("✍️ " + ", ".join(typing) + " typing…")
 
     for u, r, m, t, f, fd, ts in msgs:
-        # Skip messages not meant for this user
         if r and r not in (username, '') and u != username:
             continue
 
@@ -295,8 +318,19 @@ else:
         st.markdown(f"""
         <div style='background:{bg};color:{col};
         padding:10px;border-radius:14px;margin:6px;
-        max-width:65%;{'margin-left:auto;' if me else ''}'>
+        max-width:65%;{'margin-left:auto;' if me else ''}'">
         <b>{u} {priv_label}</b><br>{content}
         <div style="font-size:10px;opacity:.6">{ts}</div>
         </div>
         """, unsafe_allow_html=True)
+
+    # Auto-scroll to latest message
+    st.markdown("<div id='bottom'></div>", unsafe_allow_html=True)
+    st.markdown("""
+    <script>
+    var element = document.getElementById("bottom");
+    if(element){
+        element.scrollIntoView({behavior: 'smooth'});
+    }
+    </script>
+    """, unsafe_allow_html=True)
