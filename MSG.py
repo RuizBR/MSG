@@ -199,6 +199,17 @@ def get_messages(username):
     rows = execute_db_read(CHAT_DB, query, (username, username))
     return rows if rows else []
 
+# ================= CLEAR MESSAGES =================
+def clear_messages(username, recipient=None):
+    if recipient is None:
+        execute_db_write(CHAT_DB, "DELETE FROM messages WHERE recipient IS NULL OR recipient = ''")
+    else:
+        execute_db_write(
+            CHAT_DB,
+            "DELETE FROM messages WHERE (user=? AND recipient=?) OR (user=? AND recipient=?)",
+            (username, recipient, recipient, username)
+        )
+
 # ================= STREAMLIT CONFIG =================
 st.set_page_config(page_title="💬 Team Chatbox", layout="wide")
 st_autorefresh(interval=2000, key="refresh")
@@ -258,6 +269,14 @@ if st.session_state.logged_in:
         "Send To",
         ["All (public)"] + all_usernames
     )
+
+    # ----------------- Clear Chat Button -----------------
+    if st.sidebar.button("🧹 Clear Chat"):
+        if recipient == "All (public)":
+            clear_messages(username)  # Clear public chat
+        else:
+            clear_messages(username, recipient)  # Clear private chat
+        st.experimental_rerun()
 
     chat_input = st.sidebar.text_area(
         "", key="chat_input", placeholder="Type a message...", height=50
@@ -353,4 +372,3 @@ else:
     }
     </script>
     """, unsafe_allow_html=True)
-
