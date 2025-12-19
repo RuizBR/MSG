@@ -312,7 +312,7 @@ else:
         ]
 
     # Wrap all messages in the white container
-    st.markdown('<div class="chat-container">', unsafe_allow_html=True)
+    st.markdown('<div class="chat-box">', unsafe_allow_html=True)
 
     for u, r, m, t, f, fd, ts in display_msgs:
         me = u == username
@@ -353,4 +353,5 @@ else:
     }
     </script>
     """, unsafe_allow_html=True)
+
 
