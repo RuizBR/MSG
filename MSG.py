@@ -206,16 +206,7 @@ st_autorefresh(interval=2000, key="refresh")
 # ================= GLOBAL CHAT CSS =================
 st.markdown("""
 <style>
-.chat-container { display: flex; justify-content: center; }
-.chat-box { width: 100%; max-width: 900px; height: 600px; padding: 14px; border: 1px solid #ddd; border-radius: 14px; background: #ffffff; font-family: Segoe UI; overflow-y: auto; }
-.message-wrapper { display: flex; align-items: flex-start; margin: 6px 0; }
-.message-wrapper.right { justify-content: flex-end; }
-.message-wrapper.left { justify-content: flex-start; }
-.message { padding: 10px 14px; border-radius: 18px; max-width: 65%; font-size: 14px; line-height: 1.4; word-wrap: break-word; }
-.user { background: #0084ff; color: white; border-bottom-right-radius: 0; }
-.other { background: #e5e5ea; color: black; border-bottom-left-radius: 0; }
-.timestamp { font-size: 10px; opacity: 0.6; margin-top: 4px; text-align: right; }
-.user-icon { width: 32px; height: 32px; border-radius: 50%; background: #ccc; color: white; font-weight: bold; display: flex; align-items: center; justify-content: center; margin: 0 8px; flex-shrink: 0; }
+.chat-container { background-color: #ffffff; padding: 15px; border-radius: 15px; max-height: 70vh; overflow-y: auto; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -308,37 +299,48 @@ else:
     if typing:
         st.caption("✍️ " + ", ".join(typing) + " typing…")
 
-    chat_placeholder = st.empty()
-    with chat_placeholder.container():
-        st.markdown('<div class="chat-container"><div class="chat-box">', unsafe_allow_html=True)
+    if recipient == "All (public)":
+        st.subheader("🌐 Public Chat")
+        display_msgs = [msg for msg in msgs if msg[1] in (None, '')]
+    else:
+        st.subheader(f"🔒 Private Chat with {recipient}")
+        display_msgs = [
+            msg for msg in msgs
+            if (msg[0] == username and msg[1] == recipient)
+               or (msg[0] == recipient and msg[1] == username)
+        ]
 
-        for u, r, m, t, f, fd, ts in msgs:
-            me = u == username
-            side_class = "right" if me else "left"
-            msg_class = "user" if me else "other"
-            avatar_html = f'<div class="user-icon">{u[0].upper()}</div>'
+    # Wrap all messages in the white container
+    st.markdown('<div class="chat-container">', unsafe_allow_html=True)
 
-            if t == "text":
-                content = m
-            elif f and f.lower().endswith(("png","jpg","jpeg")):
-                img = base64.b64encode(fd).decode()
-                content = f"<img src='data:image/png;base64,{img}' width=200>"
-            else:
-                b = base64.b64encode(fd).decode()
-                content = f"<a download='{f}' href='data:;base64,{b}'>{f}</a>"
+    for u, r, m, t, f, fd, ts in display_msgs:
+        me = u == username
+        bg = "#0084ff" if me else "#e5e5ea"
+        col = "white" if me else "black"
+        avatar = f"<div style='width:30px;height:30px;background:#888;color:white;border-radius:50%;text-align:center;line-height:30px;font-weight:bold;margin-right:8px;'>{u[0].upper()}</div>"
 
-            st.markdown(f"""
-            <div class="message-wrapper {side_class}">
-                {avatar_html if side_class=='left' else ''}
-                <div class="message {msg_class}">
-                    <b>{u}</b><br>{content}
-                    <div class="timestamp">{ts}</div>
-                </div>
-                {avatar_html if side_class=='right' else ''}
+        if t == "text":
+            content = m
+        elif f and f.lower().endswith(("png","jpg","jpeg")):
+            img = base64.b64encode(fd).decode()
+            content = f"<img src='data:image/png;base64,{img}' width=200>"
+        else:
+            b = base64.b64encode(fd).decode()
+            content = f"<a download='{f}' href='data:;base64,{b}'>{f}</a>"
+
+        priv_label = "(private)" if recipient != "All (public)" else ""
+        st.markdown(f"""
+        <div style='display:flex; justify-content:{"flex-end" if me else "flex-start"}; margin:5px;'>
+            {"<div></div>" if me else avatar}
+            <div style='background:{bg}; color:{col}; padding:10px; border-radius:15px; max-width:65%;'>
+                <b>{u} {priv_label}</b><br>{content}
+                <div style="font-size:10px;opacity:.6">{ts}</div>
             </div>
-            """, unsafe_allow_html=True)
+            {avatar if me else ""}
+        </div>
+        """, unsafe_allow_html=True)
 
-        st.markdown('</div></div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # Auto scroll to bottom
     st.markdown("<div id='bottom'></div>", unsafe_allow_html=True)
