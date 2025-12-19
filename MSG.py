@@ -14,23 +14,55 @@ if "session_id" not in st.session_state:
         random.choices(string.ascii_letters + string.digits, k=16)
     )
 
-DB_FILE = "chatbox.db"
+# ================= DATABASE FILES =================
+USERS_DB = "users.db"
+CHAT_DB = "chatbox.db"
 
-# ================= DATABASE =================
-def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
-
-def init_db():
-    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+# ================= USERS DB =================
+def init_users_db():
+    conn = sqlite3.connect(USERS_DB, check_same_thread=False)
     c = conn.cursor()
-
-    # Users table
     c.execute("""
         CREATE TABLE IF NOT EXISTS users (
             username TEXT PRIMARY KEY,
             password_hash TEXT
         )
     """)
+    conn.commit()
+    conn.close()
+
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def register_user(username, password):
+    conn = sqlite3.connect(USERS_DB, check_same_thread=False)
+    c = conn.cursor()
+    try:
+        c.execute("INSERT INTO users VALUES (?,?)", (username, hash_password(password)))
+        conn.commit()
+        return True, "Registration successful!"
+    except sqlite3.IntegrityError:
+        return False, "Username already exists"
+    finally:
+        conn.close()
+
+def login_user_db(username, password):
+    conn = sqlite3.connect(USERS_DB, check_same_thread=False)
+    c = conn.cursor()
+    c.execute("SELECT password_hash FROM users WHERE username=?", (username,))
+    row = c.fetchone()
+    conn.close()
+    if row and row[0] == hash_password(password):
+        return True
+    return False
+
+# Initialize users DB
+init_users_db()
+
+# ================= CHAT DB =================
+def init_chat_db():
+    conn = sqlite3.connect(CHAT_DB, check_same_thread=False)
+    c = conn.cursor()
 
     # Messages table
     c.execute("""
@@ -66,12 +98,11 @@ def init_db():
     conn.commit()
     conn.close()
 
-# Run DB init at the very top
-init_db()
+init_chat_db()
 
 # ================= ACTIVE USERS =================
 def update_active_user(session_id, username):
-    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+    conn = sqlite3.connect(CHAT_DB, check_same_thread=False)
     c = conn.cursor()
     c.execute("""
         INSERT INTO active_users VALUES (?,?,?)
@@ -84,7 +115,7 @@ def update_active_user(session_id, username):
 
 def get_online_users(timeout=10):
     now = int(time.time())
-    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+    conn = sqlite3.connect(CHAT_DB, check_same_thread=False)
     c = conn.cursor()
     c.execute("""
         SELECT DISTINCT username
@@ -100,7 +131,7 @@ def get_online_users(timeout=10):
 
 # ================= TYPING =================
 def set_typing(username):
-    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+    conn = sqlite3.connect(CHAT_DB, check_same_thread=False)
     c = conn.cursor()
     c.execute("""
         INSERT INTO typing_users VALUES (?,?)
@@ -112,7 +143,7 @@ def set_typing(username):
 
 def get_typing_users(timeout=4):
     now = int(time.time())
-    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+    conn = sqlite3.connect(CHAT_DB, check_same_thread=False)
     c = conn.cursor()
     c.execute("""
         SELECT username FROM typing_users
@@ -124,7 +155,7 @@ def get_typing_users(timeout=4):
 
 # ================= MESSAGES =================
 def add_text_message(user, message, recipient=None):
-    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+    conn = sqlite3.connect(CHAT_DB, check_same_thread=False)
     c = conn.cursor()
     c.execute("""
         INSERT INTO messages VALUES (NULL,?,?,?, 'text', NULL, NULL, ?)
@@ -133,7 +164,7 @@ def add_text_message(user, message, recipient=None):
     conn.close()
 
 def add_file_message(user, file, recipient=None):
-    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+    conn = sqlite3.connect(CHAT_DB, check_same_thread=False)
     c = conn.cursor()
     c.execute("""
         INSERT INTO messages VALUES (NULL,?,?,NULL,'file',?,?,?)
@@ -143,7 +174,7 @@ def add_file_message(user, file, recipient=None):
     conn.close()
 
 def get_messages(username):
-    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+    conn = sqlite3.connect(CHAT_DB, check_same_thread=False)
     c = conn.cursor()
     c.execute("""
         SELECT user, recipient, message, msg_type, file_name, file_data, timestamp
@@ -170,36 +201,25 @@ st.sidebar.title("👤 Login / Register")
 login_tab, register_tab = st.tabs(["Login", "Register"])
 
 with login_tab:
-    login_user = st.text_input("Username", key="login_user")
-    login_pass = st.text_input("Password", type="password", key="login_pass")
+    login_user_input = st.text_input("Username", key="login_user")
+    login_pass_input = st.text_input("Password", type="password", key="login_pass")
     if st.button("Login"):
-        conn = sqlite3.connect(DB_FILE, check_same_thread=False)
-        c = conn.cursor()
-        c.execute("SELECT password_hash FROM users WHERE username=?", (login_user,))
-        row = c.fetchone()
-        conn.close()
-        if row and row[0] == hash_password(login_pass):
+        if login_user_db(login_user_input, login_pass_input):
             st.session_state.logged_in = True
-            st.session_state.username = login_user
-            st.success(f"Logged in as {login_user}")
+            st.session_state.username = login_user_input
+            st.success(f"Logged in as {login_user_input}")
         else:
             st.error("Invalid username or password")
 
 with register_tab:
-    reg_user = st.text_input("New Username", key="reg_user")
-    reg_pass = st.text_input("New Password", type="password", key="reg_pass")
+    reg_user_input = st.text_input("New Username", key="reg_user")
+    reg_pass_input = st.text_input("New Password", type="password", key="reg_pass")
     if st.button("Register"):
-        if reg_user and reg_pass:
-            try:
-                conn = sqlite3.connect(DB_FILE, check_same_thread=False)
-                c = conn.cursor()
-                c.execute("INSERT INTO users VALUES (?,?)", (reg_user, hash_password(reg_pass)))
-                conn.commit()
-                st.success("Registration successful! You can now login.")
-            except sqlite3.IntegrityError:
-                st.error("Username already exists")
-            finally:
-                conn.close()
+        success, msg = register_user(reg_user_input, reg_pass_input)
+        if success:
+            st.success(msg)
+        else:
+            st.error(msg)
 
 # ================= CHAT =================
 if st.session_state.logged_in:
