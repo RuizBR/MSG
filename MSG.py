@@ -12,6 +12,9 @@ from streamlit_autorefresh import st_autorefresh
 if "session_id" not in st.session_state:
     st.session_state.session_id = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
 
+if "local_messages" not in st.session_state:
+    st.session_state.local_messages = []
+
 # ================= UTILS =================
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
@@ -200,8 +203,6 @@ def get_messages(username):
 
 # ================= STREAMLIT CONFIG =================
 st.set_page_config(page_title="💬 Team Chatbox", layout="wide")
-
-# Autorefresh for all users every 2 seconds
 st_autorefresh(interval=2000, key="refresh")
 
 # ================= LOGIN / REGISTER =================
@@ -260,13 +261,15 @@ if st.session_state.logged_in:
 
     def send():
         if st.session_state.chat_input.strip():
-            add_text_message(
-                username,
-                st.session_state.chat_input.strip(),
-                None if recipient == "All (public)" else recipient
-            )
+            msg_text = st.session_state.chat_input.strip()
+            recipient_db = None if recipient == "All (public)" else recipient
+            add_text_message(username, msg_text, recipient_db)
             st.session_state.chat_input = ""
             remove_typing(username)
+            # append to local_messages to display instantly
+            st.session_state.local_messages.append(
+                (username, recipient_db, msg_text, "text", None, None, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            )
 
     st.sidebar.button("Send", on_click=send, use_container_width=True)
 
@@ -277,12 +280,12 @@ if st.session_state.logged_in:
     )
     if st.sidebar.button("Send File"):
         if file:
-            add_file_message(
-                username,
-                file,
-                None if recipient == "All (public)" else recipient
-            )
+            recipient_db = None if recipient == "All (public)" else recipient
+            add_file_message(username, file, recipient_db)
             remove_typing(username)
+            st.session_state.local_messages.append(
+                (username, recipient_db, None, "file", file.name, file.getvalue(), datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            )
 
 # ================= DISPLAY CHAT =================
 st.title("💬 Team Chatbox")
@@ -290,7 +293,7 @@ st.title("💬 Team Chatbox")
 if not st.session_state.logged_in:
     st.info("🔒 Please login to chat.")
 else:
-    msgs = get_messages(username)
+    msgs = get_messages(username) + st.session_state.local_messages
     typing = [u for u in get_typing_users() if u != username]
 
     if typing:
@@ -307,12 +310,14 @@ else:
 
         if t == "text":
             content = m
-        elif f.lower().endswith(("png","jpg","jpeg")):
+        elif f and f.lower().endswith(("png","jpg","jpeg")):
             img = base64.b64encode(fd).decode()
             content = f"<img src='data:image/png;base64,{img}' width=200>"
-        else:
+        elif f:
             b = base64.b64encode(fd).decode()
             content = f"<a download='{f}' href='data:;base64,{b}'>{f}</a>"
+        else:
+            content = ""
 
         st.markdown(f"""
         <div style='background:{bg};color:{col};
@@ -333,3 +338,4 @@ else:
     }
     </script>
     """, unsafe_allow_html=True)
+
