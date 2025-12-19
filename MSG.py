@@ -6,6 +6,7 @@ import base64
 import random
 import string
 import time
+import hashlib
 
 # ================= SESSION ID =================
 if "session_id" not in st.session_state:
@@ -14,14 +15,27 @@ if "session_id" not in st.session_state:
     )
 
 # ================= DATABASE =================
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
 def init_db():
     conn = sqlite3.connect("chatbox.db")
     c = conn.cursor()
 
+    # Users table
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            username TEXT PRIMARY KEY,
+            password_hash TEXT
+        )
+    """)
+
+    # Messages table with recipient for private messaging
     c.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user TEXT,
+            recipient TEXT,
             message TEXT,
             msg_type TEXT,
             file_name TEXT,
@@ -30,6 +44,7 @@ def init_db():
         )
     """)
 
+    # Video call (optional)
     c.execute("""
         CREATE TABLE IF NOT EXISTS video_call (
             id INTEGER PRIMARY KEY,
@@ -38,6 +53,7 @@ def init_db():
         )
     """)
 
+    # Active users
     c.execute("""
         CREATE TABLE IF NOT EXISTS active_users (
             session_id TEXT PRIMARY KEY,
@@ -46,6 +62,7 @@ def init_db():
         )
     """)
 
+    # Typing indicator
     c.execute("""
         CREATE TABLE IF NOT EXISTS typing_users (
             username TEXT PRIMARY KEY,
@@ -53,12 +70,15 @@ def init_db():
         )
     """)
 
+    # Initialize video_call row
     c.execute("SELECT COUNT(*) FROM video_call")
     if c.fetchone()[0] == 0:
         c.execute("INSERT INTO video_call VALUES (1,'',0)")
 
     conn.commit()
     conn.close()
+
+init_db()
 
 # ================= ACTIVE USERS =================
 def update_active_user(session_id, username):
@@ -72,19 +92,6 @@ def update_active_user(session_id, username):
     """, (session_id, username, int(time.time())))
     conn.commit()
     conn.close()
-
-def get_online_user_count(timeout=10):
-    now = int(time.time())
-    conn = sqlite3.connect("chatbox.db")
-    c = conn.cursor()
-    c.execute("""
-        SELECT COUNT(DISTINCT session_id)
-        FROM active_users
-        WHERE ? - last_seen <= ?
-    """, (now, timeout))
-    count = c.fetchone()[0]
-    conn.close()
-    return count
 
 def get_online_users(timeout=10):
     now = int(time.time())
@@ -101,19 +108,6 @@ def get_online_users(timeout=10):
     users = [r[0] for r in c.fetchall()]
     conn.close()
     return users
-
-def is_username_taken(username, session_id):
-    conn = sqlite3.connect("chatbox.db")
-    c = conn.cursor()
-    c.execute("""
-        SELECT 1 FROM active_users
-        WHERE username = ?
-          AND session_id != ?
-          AND ? - last_seen <= 10
-    """, (username, session_id, int(time.time())))
-    taken = c.fetchone() is not None
-    conn.close()
-    return taken
 
 # ================= TYPING =================
 def set_typing(username):
@@ -140,134 +134,140 @@ def get_typing_users(timeout=4):
     return users
 
 # ================= MESSAGES =================
-def add_text_message(user, message):
+def add_text_message(user, message, recipient=None):
     conn = sqlite3.connect("chatbox.db")
     c = conn.cursor()
     c.execute("""
-        INSERT INTO messages VALUES (NULL,?,?, 'text', NULL, NULL, ?)
-    """, (user, message, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+        INSERT INTO messages VALUES (NULL,?,?,?, 'text', NULL, NULL, ?)
+    """, (user, recipient, message, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
     conn.commit()
     conn.close()
 
-def add_file_message(user, file):
+def add_file_message(user, file, recipient=None):
     conn = sqlite3.connect("chatbox.db")
     c = conn.cursor()
     c.execute("""
-        INSERT INTO messages VALUES (NULL,?,NULL,'file',?,?,?)
-    """, (user, file.name, file.getvalue(),
+        INSERT INTO messages VALUES (NULL,?,?,NULL,'file',?,?,?)
+    """, (user, recipient, file.name, file.getvalue(),
           datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
     conn.commit()
     conn.close()
 
-def get_messages():
+def get_messages(username):
     conn = sqlite3.connect("chatbox.db")
     c = conn.cursor()
     c.execute("""
-        SELECT user,message,msg_type,file_name,file_data,timestamp
-        FROM messages ORDER BY id
-    """)
+        SELECT user, recipient, message, msg_type, file_name, file_data, timestamp
+        FROM messages
+        WHERE recipient IS NULL
+           OR recipient = ?
+           OR user = ?
+        ORDER BY id
+    """, (username, username))
     rows = c.fetchall()
     conn.close()
     return rows
 
-def clear_messages():
-    conn = sqlite3.connect("chatbox.db")
-    c = conn.cursor()
-    c.execute("DELETE FROM messages")
-    conn.commit()
-    conn.close()
-
-# ================= VIDEO CALL =================
-def get_video_call_status():
-    conn = sqlite3.connect("chatbox.db")
-    c = conn.cursor()
-    c.execute("SELECT room_name, started FROM video_call WHERE id=1")
-    r = c.fetchone()
-    conn.close()
-    return r
-
-def start_video_call(room):
-    conn = sqlite3.connect("chatbox.db")
-    c = conn.cursor()
-    c.execute("UPDATE video_call SET room_name=?, started=1 WHERE id=1", (room,))
-    conn.commit()
-    conn.close()
-
-def end_video_call():
-    conn = sqlite3.connect("chatbox.db")
-    c = conn.cursor()
-    c.execute("UPDATE video_call SET room_name='', started=0 WHERE id=1")
-    conn.commit()
-    conn.close()
-
 # ================= STREAMLIT =================
 st.set_page_config(page_title="💬 Team Chatbox", layout="wide")
-init_db()
-st_autorefresh(interval=5000, key="refresh")
+st_autorefresh(interval=3000, key="refresh")
 
-# ================= SIDEBAR =================
-online_count = get_online_user_count()
-st.sidebar.markdown(f"🟢 **{online_count} Users Online**")
+# ================= LOGIN / REGISTER =================
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+    st.session_state.username = None
 
-st.sidebar.title("👤 User Settings")
-username = st.sidebar.text_input("Your Name").strip()
+st.sidebar.title("👤 Login / Register")
+login_tab, register_tab = st.tabs(["Login", "Register"])
 
-if username:
-    if is_username_taken(username, st.session_state.session_id):
-        st.sidebar.error("❌ Username already in use")
-        username = ""
-    else:
-        update_active_user(st.session_state.session_id, username)
+with login_tab:
+    login_user = st.text_input("Username", key="login_user")
+    login_pass = st.text_input("Password", type="password", key="login_pass")
+    if st.button("Login"):
+        conn = sqlite3.connect("chatbox.db")
+        c = conn.cursor()
+        c.execute("SELECT password_hash FROM users WHERE username=?", (login_user,))
+        row = c.fetchone()
+        conn.close()
+        if row and row[0] == hash_password(login_pass):
+            st.session_state.logged_in = True
+            st.session_state.username = login_user
+            st.success(f"Logged in as {login_user}")
+        else:
+            st.error("Invalid username or password")
 
-online_list = get_online_users()
-if online_list:
-    st.sidebar.markdown("### 👁️ Online")
+with register_tab:
+    reg_user = st.text_input("New Username", key="reg_user")
+    reg_pass = st.text_input("New Password", type="password", key="reg_pass")
+    if st.button("Register"):
+        if reg_user and reg_pass:
+            conn = sqlite3.connect("chatbox.db")
+            c = conn.cursor()
+            try:
+                c.execute("INSERT INTO users VALUES (?,?)", (reg_user, hash_password(reg_pass)))
+                conn.commit()
+                st.success("Registration successful. You can now login.")
+            except sqlite3.IntegrityError:
+                st.error("Username already exists")
+            conn.close()
+
+# ================= CHAT =================
+if st.session_state.logged_in:
+    username = st.session_state.username
+    update_active_user(st.session_state.session_id, username)
+
+    st.sidebar.markdown(f"🟢 Online Users ({len(get_online_users())})")
+    online_list = get_online_users()
     for u in online_list:
         st.sidebar.markdown(f"🟢 {u}")
 
-if st.sidebar.button("🗑️ Clear Chat"):
-    clear_messages()
-    st.rerun()
+    # Recipient selector
+    recipient = st.sidebar.selectbox(
+        "Send To",
+        ["All (public)"] + [u for u in online_list if u != username]
+    )
 
-msg_key = "chat_input"
-
-# 🔒 READ-ONLY MODE
-if not username:
-    st.sidebar.info("🔒 Read-only mode. Enter a username to chat.")
-else:
-    msg = st.sidebar.text_area("", key=msg_key, placeholder="Type a message...")
+    # Message input
+    msg = st.sidebar.text_area("", key="chat_input", placeholder="Type a message...")
     if msg.strip():
         set_typing(username)
 
     def send():
-        if st.session_state[msg_key].strip():
-            add_text_message(username, st.session_state[msg_key].strip())
-            st.session_state[msg_key] = ""
+        if st.session_state["chat_input"].strip():
+            add_text_message(username, st.session_state["chat_input"].strip(),
+                             None if recipient=="All (public)" else recipient)
+            st.session_state["chat_input"] = ""
 
     st.sidebar.button("Send", on_click=send, use_container_width=True)
 
+    # File upload
     file = st.sidebar.file_uploader("📎 Attach file",
         type=["png","jpg","jpeg","pdf","docx"])
     if st.sidebar.button("Send File"):
         if file:
-            add_file_message(username, file)
+            add_file_message(username, file,
+                             None if recipient=="All (public)" else recipient)
 
-# ================= MAIN =================
+# ================= DISPLAY CHAT =================
 st.title("💬 Team Chatbox")
 
-typing = [u for u in get_typing_users() if u != username]
-if typing:
-    st.caption("✍️ " + ", ".join(typing) + " typing…")
-
-if not username:
-    st.info("👤 Enter your name to view the chat.")
+if not st.session_state.logged_in:
+    st.info("🔒 Please login to chat.")
 else:
-    msgs = get_messages()
-    html = "<div style='max-width:900px;height:600px;overflow:auto;margin:auto;'>"
-    for u,m,t,f,fd,ts in msgs:
+    msgs = get_messages(username)
+    typing = [u for u in get_typing_users() if u != username]
+    if typing:
+        st.caption("✍️ " + ", ".join(typing) + " typing…")
+
+    for u, r, m, t, f, fd, ts in msgs:
+        # Skip messages not meant for this user
+        if r and r != username and u != username:
+            continue
+
         me = u == username
         bg = "#0084ff" if me else "#e5e5ea"
         col = "white" if me else "black"
+        priv_label = "(private)" if r else ""
 
         if t == "text":
             content = m
@@ -278,13 +278,11 @@ else:
             b = base64.b64encode(fd).decode()
             content = f"<a download='{f}' href='data:;base64,{b}'>{f}</a>"
 
-        html += f"""
-        <div style="background:{bg};color:{col};
+        st.markdown(f"""
+        <div style='background:{bg};color:{col};
         padding:10px;border-radius:14px;margin:6px;
-        max-width:65%;{'margin-left:auto;' if me else ''}">
-        <b>{u}</b><br>{content}
+        max-width:65%;{'margin-left:auto;' if me else ''}'>
+        <b>{u} {priv_label}</b><br>{content}
         <div style="font-size:10px;opacity:.6">{ts}</div>
         </div>
-        """
-    html += "</div><script>document.querySelector('div').scrollTop=999999</script>"
-    st.components.v1.html(html, height=650)
+        """, unsafe_allow_html=True)
