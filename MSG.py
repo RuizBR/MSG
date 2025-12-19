@@ -90,9 +90,9 @@ def init_chat_db():
 
 init_chat_db()
 
-# ================= ROBUST WRITE FUNCTION =================
+# ================= ROBUST DB FUNCTIONS =================
 def execute_db_write(query, params=(), retries=10, delay=0.2):
-    """Executes a write operation with retries and timeout to avoid 'Database busy'."""
+    """Write operation with retries and timeout to handle 'Database busy'."""
     while retries > 0:
         try:
             conn = sqlite3.connect(CHAT_DB, timeout=30)
@@ -107,6 +107,23 @@ def execute_db_write(query, params=(), retries=10, delay=0.2):
             time.sleep(delay)
     else:
         st.error("Database busy. Please refresh the page and try again.")
+
+def execute_db_read(query, params=(), retries=10, delay=0.2):
+    """Read operation with retries to handle SQLite locks."""
+    while retries > 0:
+        try:
+            conn = sqlite3.connect(CHAT_DB, timeout=30)
+            cur = conn.cursor()
+            cur.execute(query, params)
+            rows = cur.fetchall()
+            cur.close()
+            conn.close()
+            return rows
+        except sqlite3.OperationalError:
+            retries -= 1
+            time.sleep(delay)
+    st.error("Database busy. Please refresh the page and try again.")
+    return []
 
 # ================= CHAT FUNCTIONS =================
 def add_text_message(user, message, recipient=None):
@@ -138,47 +155,35 @@ def set_typing(username):
     """, (username, int(time.time())))
 
 def get_online_users(timeout=10):
-    conn = sqlite3.connect(CHAT_DB)
-    cur = conn.cursor()
     now = int(time.time())
-    cur.execute("""
+    query = """
         SELECT DISTINCT username
         FROM active_users
         WHERE ? - last_seen <= ?
           AND username IS NOT NULL
           AND username != ''
         ORDER BY username
-    """, (now, timeout))
-    users = [r[0] for r in cur.fetchall()]
-    conn.close()
-    return users
+    """
+    return execute_db_read(query, (now, timeout))
 
 def get_typing_users(timeout=4):
-    conn = sqlite3.connect(CHAT_DB)
-    cur = conn.cursor()
     now = int(time.time())
-    cur.execute("""
+    query = """
         SELECT username FROM typing_users
         WHERE ? - last_typing <= ?
-    """, (now, timeout))
-    users = [r[0] for r in cur.fetchall()]
-    conn.close()
-    return users
+    """
+    return execute_db_read(query, (now, timeout))
 
 def get_messages(username):
-    conn = sqlite3.connect(CHAT_DB)
-    cur = conn.cursor()
-    cur.execute("""
+    query = """
         SELECT user, recipient, message, msg_type, file_name, file_data, timestamp
         FROM messages
         WHERE recipient IS NULL
            OR recipient = ?
            OR user = ?
         ORDER BY id
-    """, (username, username))
-    rows = cur.fetchall()
-    conn.close()
-    return rows
+    """
+    return execute_db_read(query, (username, username))
 
 # ================= STREAMLIT =================
 st.set_page_config(page_title="💬 Team Chatbox", layout="wide")
