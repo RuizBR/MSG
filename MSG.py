@@ -203,6 +203,20 @@ def get_messages(username):
 st.set_page_config(page_title="💬 Team Chatbox", layout="wide")
 st_autorefresh(interval=2000, key="refresh")
 
+# ================= GLOBAL CHAT CSS =================
+st.markdown("""
+<style>
+/* Entire chat container background */
+.chat-container {
+    background-color: #ffffff;
+    padding: 15px;
+    border-radius: 15px;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # ================= LOGIN / REGISTER =================
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
@@ -299,22 +313,20 @@ else:
         st.subheader(f"🔒 Private Chat with {recipient}")
         display_msgs = [
             msg for msg in msgs
-            if (msg[0] == username and msg[1] == recipient)      # messages I sent
-               or (msg[0] == recipient and msg[1] == username)  # messages they sent to me
+            if (msg[0] == username and msg[1] == recipient)
+               or (msg[0] == recipient and msg[1] == username)
         ]
 
-    # Wrap all messages in a white background container
-    st.markdown("<div style='background:#ffffff; padding:15px; border-radius:15px;'>", unsafe_allow_html=True)
+    # Wrap all messages in the white container
+    st.markdown('<div class="chat-container">', unsafe_allow_html=True)
 
     for u, r, m, t, f, fd, ts in display_msgs:
         me = u == username
         bg = "#0084ff" if me else "#e5e5ea"
         col = "white" if me else "black"
 
-        # Avatar using first letter
         avatar = f"<div style='width:30px;height:30px;background:#888;color:white;border-radius:50%;text-align:center;line-height:30px;font-weight:bold;margin-right:8px;'>{u[0].upper()}</div>"
 
-        # Message content
         if t == "text":
             content = m
         elif f and f.lower().endswith(("png","jpg","jpeg")):
@@ -326,7 +338,6 @@ else:
 
         priv_label = "(private)" if recipient != "All (public)" else ""
 
-        # Message bubble
         st.markdown(f"""
         <div style='display:flex; justify-content:{"flex-end" if me else "flex-start"}; margin:5px;'>
             {"<div></div>" if me else avatar}
@@ -338,7 +349,7 @@ else:
         </div>
         """, unsafe_allow_html=True)
 
-    st.markdown("</div>", unsafe_allow_html=True)  # close the container
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # Auto scroll to bottom
     st.markdown("<div id='bottom'></div>", unsafe_allow_html=True)
