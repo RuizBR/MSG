@@ -122,7 +122,6 @@ msg_text = st.sidebar.text_area(
 )
 
 # ---------------- Send button ----------------
-# ---------------- Send button ----------------
 def send_message():
     if username and st.session_state.chat_msg.strip():
         add_text_message(username, st.session_state.chat_msg.strip())
@@ -141,7 +140,7 @@ if st.sidebar.button("Send File"):
         add_file_message(username, uploaded_file)
 
 # ================= AUTO REFRESH =================
-st_autorefresh(interval=1000, key="chat_refresh")
+st_autorefresh(interval=3000, key="chat_refresh")
 
 # ================= VIDEO CALL =================
 st.title("💬 Team Chatbox")
@@ -159,7 +158,6 @@ else:
     st.info("Click the link to join the video call in a new tab.")
     if st.button("❌ End Video Call"):
         end_video_call()
-        st.rerun()
 
 # ================= CHAT DISPLAY =================
 messages = get_messages()
@@ -237,6 +235,7 @@ if (chatBox) {
 """
 
 st.components.v1.html(chat_html, height=650, scrolling=False)
+
 
 
 
