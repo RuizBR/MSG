@@ -180,9 +180,9 @@ def get_messages(username):
     query = """
         SELECT user, recipient, message, msg_type, file_name, file_data, timestamp
         FROM messages
-        WHERE recipient IS NULL OR recipient = ''       -- public
-           OR recipient = ?                              -- private to me
-           OR user = ?                                   -- my messages
+        WHERE recipient IS NULL OR recipient = ''        -- public
+           OR recipient = ?                               -- private to me
+           OR user = ?                                    -- my messages
         ORDER BY id
     """
     rows = execute_db_read(query, (username, username))
@@ -191,15 +191,8 @@ def get_messages(username):
 # ================= STREAMLIT CONFIG =================
 st.set_page_config(page_title="💬 Team Chatbox", layout="wide")
 
-# ================= AUTOREFRESH SAFE =================
-if "just_sent" not in st.session_state:
-    st.session_state.just_sent = False
-
-# Only autorefresh if a message wasn't just sent
-if not st.session_state.just_sent:
-    st_autorefresh(interval=3000, key="refresh")
-else:
-    st.session_state.just_sent = False  # reset after rerun
+# Always autorefresh so other users see new messages
+st_autorefresh(interval=2000, key="refresh")
 
 # ================= LOGIN / REGISTER =================
 if "logged_in" not in st.session_state:
@@ -264,7 +257,6 @@ if st.session_state.logged_in:
             )
             st.session_state.chat_input = ""
             remove_typing(username)
-            st.session_state.just_sent = True
             st.experimental_rerun()
 
     st.sidebar.button("Send", on_click=send, use_container_width=True)
@@ -282,7 +274,6 @@ if st.session_state.logged_in:
                 None if recipient == "All (public)" else recipient
             )
             remove_typing(username)
-            st.session_state.just_sent = True
             st.experimental_rerun()
 
 # ================= DISPLAY CHAT =================
