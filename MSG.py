@@ -8,7 +8,7 @@ import string
 
 # ================= DATABASE =================
 def init_db():
-    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
+    conn = sqlite3.connect("chatbox.db")
     c = conn.cursor()
     # Messages table
     c.execute("""
@@ -38,7 +38,7 @@ def init_db():
 
 # ================= MESSAGE FUNCTIONS =================
 def add_text_message(user, message):
-    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
+    conn = sqlite3.connect("chatbox.db")
     c = conn.cursor()
     c.execute("""
         INSERT INTO messages (user, message, msg_type, timestamp)
@@ -48,7 +48,7 @@ def add_text_message(user, message):
     conn.close()
 
 def add_file_message(user, file):
-    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
+    conn = sqlite3.connect("chatbox.db")
     c = conn.cursor()
     c.execute("""
         INSERT INTO messages (user, msg_type, file_name, file_data, timestamp)
@@ -58,7 +58,7 @@ def add_file_message(user, file):
     conn.close()
 
 def get_messages():
-    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
+    conn = sqlite3.connect("chatbox.db")
     c = conn.cursor()
     c.execute("""
         SELECT user, message, msg_type, file_name, file_data, timestamp
@@ -70,7 +70,7 @@ def get_messages():
     return rows
 
 def clear_messages():
-    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
+    conn = sqlite3.connect("chatbox.db")
     c = conn.cursor()
     c.execute("DELETE FROM messages")
     conn.commit()
@@ -78,21 +78,21 @@ def clear_messages():
 
 # ================= VIDEO CALL FUNCTIONS =================
 def start_video_call(room_name):
-    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
+    conn = sqlite3.connect("chatbox.db")
     c = conn.cursor()
     c.execute("UPDATE video_call SET room_name = ?, started = 1 WHERE id = 1", (room_name,))
     conn.commit()
     conn.close()
 
 def end_video_call():
-    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
+    conn = sqlite3.connect("chatbox.db")
     c = conn.cursor()
     c.execute("UPDATE video_call SET room_name = '', started = 0 WHERE id = 1")
     conn.commit()
     conn.close()
 
 def get_video_call_status():
-    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
+    conn = sqlite3.connect("chatbox.db")
     c = conn.cursor()
     c.execute("SELECT room_name, started FROM video_call WHERE id = 1")
     row = c.fetchone()
