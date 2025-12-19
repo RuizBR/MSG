@@ -92,7 +92,6 @@ init_chat_db()
 
 # ================= ROBUST DB FUNCTIONS =================
 def execute_db_write(query, params=(), retries=10, delay=0.2):
-    """Write operation with retries and timeout to handle 'Database busy'."""
     while retries > 0:
         try:
             conn = sqlite3.connect(CHAT_DB, timeout=30)
@@ -109,7 +108,6 @@ def execute_db_write(query, params=(), retries=10, delay=0.2):
         st.error("Database busy. Please refresh the page and try again.")
 
 def execute_db_read(query, params=(), retries=10, delay=0.2):
-    """Read operation with retries to handle SQLite locks."""
     while retries > 0:
         try:
             conn = sqlite3.connect(CHAT_DB, timeout=30)
@@ -122,7 +120,6 @@ def execute_db_read(query, params=(), retries=10, delay=0.2):
         except sqlite3.OperationalError:
             retries -= 1
             time.sleep(delay)
-    # Return empty list instead of None
     return []
 
 # ================= CHAT FUNCTIONS =================
@@ -165,7 +162,7 @@ def get_online_users(timeout=10):
         ORDER BY username
     """
     rows = execute_db_read(query, (now, timeout))
-    return rows if rows else []
+    return [r[0] for r in rows] if rows else []
 
 def get_typing_users(timeout=4):
     now = int(time.time())
@@ -174,15 +171,15 @@ def get_typing_users(timeout=4):
         WHERE ? - last_typing <= ?
     """
     rows = execute_db_read(query, (now, timeout))
-    return rows if rows else []
+    return [r[0] for r in rows] if rows else []
 
 def get_messages(username):
     query = """
         SELECT user, recipient, message, msg_type, file_name, file_data, timestamp
         FROM messages
-        WHERE recipient IS NULL
-           OR recipient = ?
-           OR user = ?
+        WHERE recipient IS NULL OR recipient = ''       -- public
+           OR recipient = ?                              -- private to me
+           OR user = ?                                   -- my messages
         ORDER BY id
     """
     rows = execute_db_read(query, (username, username))
@@ -262,14 +259,14 @@ if not st.session_state.logged_in:
     st.info("🔒 Please login to chat.")
 else:
     msgs = get_messages(username)
-    typing = [u[0] for u in get_typing_users() if u[0] != username]
+    typing = [u for u in get_typing_users() if u != username]
 
     if typing:
         st.caption("✍️ " + ", ".join(typing) + " typing…")
 
     for u, r, m, t, f, fd, ts in msgs:
         # Skip messages not meant for this user
-        if r and r != username and u != username:
+        if r and r not in (username, '') and u != username:
             continue
 
         me = u == username
