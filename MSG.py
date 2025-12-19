@@ -101,11 +101,13 @@ def init_video_call_db():
         CREATE TABLE IF NOT EXISTS video_call (
             id INTEGER PRIMARY KEY,
             room_name TEXT,
-            started INTEGER
+            started INTEGER,
+            user1 TEXT,
+            user2 TEXT
         )
     """)
     # Ensure a single row exists
-    c.execute("INSERT OR IGNORE INTO video_call (id, room_name, started) VALUES (1, '', 0)")
+    c.execute("INSERT OR IGNORE INTO video_call (id, room_name, started, user1, user2) VALUES (1, '', 0, '', '')")
     conn.commit()
     conn.close()
 
@@ -232,29 +234,30 @@ def clear_messages(username, recipient=None):
         )
 
 # ================= VIDEO CALL FUNCTIONS =================
-def start_video_call(room_name):
+def start_video_call(room_name, user1, user2):
     conn = sqlite3.connect("chatbox.db", check_same_thread=False)
     c = conn.cursor()
-    c.execute("UPDATE video_call SET room_name = ?, started = 1 WHERE id = 1", (room_name,))
+    c.execute("UPDATE video_call SET room_name = ?, started = 1, user1=?, user2=? WHERE id = 1",
+              (room_name, user1, user2))
     conn.commit()
     conn.close()
 
 def end_video_call():
     conn = sqlite3.connect("chatbox.db", check_same_thread=False)
     c = conn.cursor()
-    c.execute("UPDATE video_call SET room_name = '', started = 0 WHERE id = 1")
+    c.execute("UPDATE video_call SET room_name = '', started = 0, user1='', user2='' WHERE id = 1")
     conn.commit()
     conn.close()
 
 def get_video_call_status():
     conn = sqlite3.connect("chatbox.db", check_same_thread=False)
     c = conn.cursor()
-    c.execute("SELECT room_name, started FROM video_call WHERE id = 1")
+    c.execute("SELECT room_name, started, user1, user2 FROM video_call WHERE id = 1")
     row = c.fetchone()
     conn.close()
     if row:
-        return row[0], row[1]
-    return '', 0
+        return row
+    return '', 0, '', ''
 
 # ================= STREAMLIT CONFIG =================
 st.set_page_config(page_title="💬 Team Chatbox", layout="wide")
@@ -354,28 +357,32 @@ if st.session_state.logged_in:
             remove_typing(username)
 
     # ================= VIDEO CALL SIDEBAR =================
-    room_name, started = get_video_call_status()
-    if "video_btn_clicked" not in st.session_state:
-        st.session_state.video_btn_clicked = False
-
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("📹 Video Call")
-
-    if started == 0:
-        if st.sidebar.button("Start Video Call") or st.session_state.video_btn_clicked:
-            st.session_state.video_btn_clicked = True
-            room_name = "TeamChat_" + ''.join(random.choices(string.ascii_letters + string.digits, k=6))
-            start_video_call(room_name)
-            js = f"window.open('https://meet.jit.si/{room_name}', '_blank')"
-            st.components.v1.html(f"<script>{js}</script>", height=0)
-            st.experimental_rerun()
-    else:
-        st.sidebar.markdown(f"### Active: Room `{room_name}`")
-        st.sidebar.markdown(f"[Join Video Call](https://meet.jit.si/{room_name})", unsafe_allow_html=True)
-        if st.sidebar.button("End Video Call"):
-            end_video_call()
+    if recipient != "All (public)":
+        room_name, started, user1, user2 = get_video_call_status()
+        if "video_btn_clicked" not in st.session_state:
             st.session_state.video_btn_clicked = False
-            st.experimental_rerun()
+
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("📹 Private Video Call")
+
+        if started == 0:
+            if st.sidebar.button("Start Video Call") or st.session_state.video_btn_clicked:
+                st.session_state.video_btn_clicked = True
+                # Unique room per private chat
+                room_name = f"PrivateCall_{username}_{recipient}_" + ''.join(random.choices(string.ascii_letters + string.digits, k=4))
+                start_video_call(room_name, username, recipient)
+                # JS attempt to open new tab
+                js = f"window.open('https://meet.jit.si/{room_name}', '_blank')"
+                st.components.v1.html(f"<script>{js}</script>", height=0)
+                st.success(f"Video call started! Click the link to join:")
+                st.markdown(f"[Join Video Call](https://meet.jit.si/{room_name})", unsafe_allow_html=True)
+        else:
+            st.sidebar.markdown(f"### Active Call: Room `{room_name}`")
+            st.markdown(f"[Join Video Call](https://meet.jit.si/{room_name})", unsafe_allow_html=True)
+            if st.sidebar.button("End Video Call"):
+                end_video_call()
+                st.session_state.video_btn_clicked = False
+                st.experimental_rerun()
 
 # ================= DISPLAY CHAT =================
 st.title("💬 Team Chatbox")
@@ -418,13 +425,11 @@ if st.session_state.logged_in:
 
         priv_label = "(private)" if recipient != "All (public)" else ""
         st.markdown(f"""
-        <div style='display:flex; justify-content:{"flex-end" if me else "flex-start"}; margin:5px;'>
-            {"<div></div>" if me else avatar}
+        <div style='display:flex; justify-content:{"flex-end" if me else "flex-start"}; margin:5px;'>{"" if me else avatar}
             <div style='background:{bg}; color:{col}; padding:10px; border-radius:15px; max-width:65%;'>
                 <b>{u} {priv_label}</b><br>{content}
                 <div style="font-size:10px;opacity:.6">{ts}</div>
-            </div>
-            {avatar if me else ""}
+            </div>{avatar if me else ""}
         </div>
         """, unsafe_allow_html=True)
 
