@@ -14,9 +14,9 @@ if "session_id" not in st.session_state:
         random.choices(string.ascii_letters + string.digits, k=16)
     )
 
-# ================= DATABASE =================
 DB_FILE = "chatbox.db"
 
+# ================= DATABASE =================
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
@@ -46,15 +46,6 @@ def init_db():
         )
     """)
 
-    # Video call (optional)
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS video_call (
-            id INTEGER PRIMARY KEY,
-            room_name TEXT,
-            started INTEGER
-        )
-    """)
-
     # Active users
     c.execute("""
         CREATE TABLE IF NOT EXISTS active_users (
@@ -72,15 +63,10 @@ def init_db():
         )
     """)
 
-    # Initialize video_call row
-    c.execute("SELECT COUNT(*) FROM video_call")
-    if c.fetchone()[0] == 0:
-        c.execute("INSERT INTO video_call VALUES (1,'',0)")
-
     conn.commit()
     conn.close()
 
-# Initialize DB safely once per session
+# Run DB init only once per session
 if "db_initialized" not in st.session_state:
     init_db()
     st.session_state.db_initialized = True
@@ -195,7 +181,7 @@ with login_tab:
             c.execute("SELECT password_hash FROM users WHERE username=?", (login_user,))
             row = c.fetchone()
         except sqlite3.OperationalError:
-            st.error("Database not ready. Please refresh the page.")
+            st.error("Database not ready. Refresh the page and try again.")
             row = None
         finally:
             conn.close()
@@ -212,15 +198,18 @@ with register_tab:
     reg_pass = st.text_input("New Password", type="password", key="reg_pass")
     if st.button("Register"):
         if reg_user and reg_pass:
-            conn = sqlite3.connect(DB_FILE, check_same_thread=False)
-            c = conn.cursor()
             try:
+                conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+                c = conn.cursor()
                 c.execute("INSERT INTO users VALUES (?,?)", (reg_user, hash_password(reg_pass)))
                 conn.commit()
                 st.success("Registration successful. You can now login.")
             except sqlite3.IntegrityError:
                 st.error("Username already exists")
-            conn.close()
+            except sqlite3.OperationalError:
+                st.error("Database not ready. Refresh the page and try again.")
+            finally:
+                conn.close()
 
 # ================= CHAT =================
 if st.session_state.logged_in:
@@ -271,9 +260,8 @@ else:
         st.caption("✍️ " + ", ".join(typing) + " typing…")
 
     for u, r, m, t, f, fd, ts in msgs:
-        # Skip messages not meant for this user
         if r and r != username and u != username:
-            continue
+            continue  # skip messages not meant for this user
 
         me = u == username
         bg = "#0084ff" if me else "#e5e5ea"
