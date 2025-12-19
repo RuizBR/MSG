@@ -316,7 +316,7 @@ if st.session_state.logged_in:
         ["All (public)"] + all_usernames
     )
 
-    # ----------------- Clear Chat Button -----------------
+    # ----------------- Chat & Video Buttons in Sidebar -----------------
     if st.sidebar.button("🧹 Clear Chat"):
         if recipient == "All (public)":
             clear_messages(username)  # Clear public chat
@@ -353,12 +353,34 @@ if st.session_state.logged_in:
             add_file_message(username, file, recipient_db)
             remove_typing(username)
 
+    # ================= VIDEO CALL SIDEBAR =================
+    room_name, started = get_video_call_status()
+    if "video_btn_clicked" not in st.session_state:
+        st.session_state.video_btn_clicked = False
+
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("📹 Video Call")
+
+    if started == 0:
+        if st.sidebar.button("Start Video Call") or st.session_state.video_btn_clicked:
+            st.session_state.video_btn_clicked = True
+            room_name = "TeamChat_" + ''.join(random.choices(string.ascii_letters + string.digits, k=6))
+            start_video_call(room_name)
+            js = f"window.open('https://meet.jit.si/{room_name}', '_blank')"
+            st.components.v1.html(f"<script>{js}</script>", height=0)
+            st.experimental_rerun()
+    else:
+        st.sidebar.markdown(f"### Active: Room `{room_name}`")
+        st.sidebar.markdown(f"[Join Video Call](https://meet.jit.si/{room_name})", unsafe_allow_html=True)
+        if st.sidebar.button("End Video Call"):
+            end_video_call()
+            st.session_state.video_btn_clicked = False
+            st.experimental_rerun()
+
 # ================= DISPLAY CHAT =================
 st.title("💬 Team Chatbox")
 
-if not st.session_state.logged_in:
-    st.info("🔒 Please login to chat.")
-else:
+if st.session_state.logged_in:
     msgs = get_messages(username)
     typing = [u for u in get_typing_users() if u != username]
 
@@ -407,7 +429,6 @@ else:
         """, unsafe_allow_html=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
-
     # Auto scroll to bottom
     st.markdown("<div id='bottom'></div>", unsafe_allow_html=True)
     st.markdown("""
@@ -418,29 +439,3 @@ else:
     }
     </script>
     """, unsafe_allow_html=True)
-
-# ================= VIDEO CALL =================
-st.markdown("---")
-st.subheader("📹 Video Call")
-
-room_name, started = get_video_call_status()
-
-if "video_btn_clicked" not in st.session_state:
-    st.session_state.video_btn_clicked = False
-
-if started == 0:
-    if st.button("Start Video Call") or st.session_state.video_btn_clicked:
-        st.session_state.video_btn_clicked = True
-        room_name = "TeamChat_" + ''.join(random.choices(string.ascii_letters + string.digits, k=6))
-        start_video_call(room_name)
-        js = f"window.open('https://meet.jit.si/{room_name}', '_blank')"
-        st.components.v1.html(f"<script>{js}</script>", height=0)
-        st.experimental_rerun()
-else:
-    st.markdown(f"### Video Call Active: Room `{room_name}`")
-    st.markdown(f"[Join Video Call in New Tab](https://meet.jit.si/{room_name})", unsafe_allow_html=True)
-    st.info("Click the link to join the video call in a new tab.")
-    if st.button("End Video Call"):
-        end_video_call()
-        st.session_state.video_btn_clicked = False
-        st.experimental_rerun()
