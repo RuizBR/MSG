@@ -90,23 +90,25 @@ def init_chat_db():
 
 init_chat_db()
 
-# ================= CHAT FUNCTIONS =================
-def execute_db_write(query, params=(), retries=5):
-    """Executes a write operation with retry logic for SQLite busy errors."""
+# ================= ROBUST WRITE FUNCTION =================
+def execute_db_write(query, params=(), retries=10, delay=0.2):
+    """Executes a write operation with retries and timeout to avoid 'Database busy'."""
     while retries > 0:
         try:
-            conn = sqlite3.connect(CHAT_DB, timeout=5)
+            conn = sqlite3.connect(CHAT_DB, timeout=30)
             cur = conn.cursor()
             cur.execute(query, params)
             conn.commit()
+            cur.close()
             conn.close()
             break
         except sqlite3.OperationalError:
             retries -= 1
-            time.sleep(0.1)
+            time.sleep(delay)
     else:
         st.error("Database busy. Please refresh the page and try again.")
 
+# ================= CHAT FUNCTIONS =================
 def add_text_message(user, message, recipient=None):
     execute_db_write(
         "INSERT INTO messages VALUES (NULL,?,?,?, 'text', NULL, NULL, ?)",
