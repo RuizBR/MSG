@@ -94,20 +94,21 @@ def init_chat_db():
 init_chat_db()
 
 # ================= VIDEO CALL DB =================
+VC_DB = "video_call.db"
+
 def init_video_call_db():
-    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
+    conn = sqlite3.connect(VC_DB, check_same_thread=False)
     c = conn.cursor()
     c.execute("""
-        CREATE TABLE IF NOT EXISTS video_call (
-            id INTEGER PRIMARY KEY,
+        CREATE TABLE IF NOT EXISTS video_calls (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             room_name TEXT,
             started INTEGER,
             user1 TEXT,
-            user2 TEXT
+            user2 TEXT,
+            created_at TEXT
         )
     """)
-    # Ensure a single row exists
-    c.execute("INSERT OR IGNORE INTO video_call (id, room_name, started, user1, user2) VALUES (1, '', 0, '', '')")
     conn.commit()
     conn.close()
 
@@ -235,29 +236,35 @@ def clear_messages(username, recipient=None):
 
 # ================= VIDEO CALL FUNCTIONS =================
 def start_video_call(room_name, user1, user2):
-    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
+    conn = sqlite3.connect(VC_DB, check_same_thread=False)
     c = conn.cursor()
-    c.execute("UPDATE video_call SET room_name = ?, started = 1, user1=?, user2=? WHERE id = 1",
-              (room_name, user1, user2))
+    c.execute("""
+        INSERT INTO video_calls (room_name, started, user1, user2, created_at)
+        VALUES (?,?,?,?,?)
+    """, (room_name, 1, user1, user2, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
     conn.commit()
     conn.close()
 
-def end_video_call():
-    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
+def end_video_call(room_name):
+    conn = sqlite3.connect(VC_DB, check_same_thread=False)
     c = conn.cursor()
-    c.execute("UPDATE video_call SET room_name = '', started = 0, user1='', user2='' WHERE id = 1")
+    c.execute("UPDATE video_calls SET started=0 WHERE room_name=?", (room_name,))
     conn.commit()
     conn.close()
 
-def get_video_call_status():
-    conn = sqlite3.connect("chatbox.db", check_same_thread=False)
+def get_video_call_status(user1, user2):
+    conn = sqlite3.connect(VC_DB, check_same_thread=False)
     c = conn.cursor()
-    c.execute("SELECT room_name, started, user1, user2 FROM video_call WHERE id = 1")
+    c.execute("""
+        SELECT room_name, started FROM video_calls
+        WHERE (user1=? AND user2=?) OR (user1=? AND user2=?)
+        ORDER BY id DESC LIMIT 1
+    """, (user1, user2, user2, user1))
     row = c.fetchone()
     conn.close()
     if row:
         return row
-    return '', 0, '', ''
+    return '', 0
 
 # ================= STREAMLIT CONFIG =================
 st.set_page_config(page_title="💬 Team Chatbox", layout="wide")
@@ -358,7 +365,7 @@ if st.session_state.logged_in:
 
     # ================= VIDEO CALL SIDEBAR =================
     if recipient != "All (public)":
-        room_name, started, user1, user2 = get_video_call_status()
+        room_name, started = get_video_call_status(username, recipient)
         if "video_btn_clicked" not in st.session_state:
             st.session_state.video_btn_clicked = False
 
@@ -368,10 +375,8 @@ if st.session_state.logged_in:
         if started == 0:
             if st.sidebar.button("Start Video Call") or st.session_state.video_btn_clicked:
                 st.session_state.video_btn_clicked = True
-                # Unique room per private chat
                 room_name = f"PrivateCall_{username}_{recipient}_" + ''.join(random.choices(string.ascii_letters + string.digits, k=4))
                 start_video_call(room_name, username, recipient)
-                # JS attempt to open new tab
                 js = f"window.open('https://meet.jit.si/{room_name}', '_blank')"
                 st.components.v1.html(f"<script>{js}</script>", height=0)
                 st.success(f"Video call started! Click the link to join:")
@@ -380,7 +385,7 @@ if st.session_state.logged_in:
             st.sidebar.markdown(f"### Active Call: Room `{room_name}`")
             st.markdown(f"[Join Video Call](https://meet.jit.si/{room_name})", unsafe_allow_html=True)
             if st.sidebar.button("End Video Call"):
-                end_video_call()
+                end_video_call(room_name)
                 st.session_state.video_btn_clicked = False
                 st.experimental_rerun()
 
@@ -405,7 +410,6 @@ if st.session_state.logged_in:
                or (msg[0] == recipient and msg[1] == username)
         ]
 
-    # Wrap all messages in the white container
     st.markdown('<div class="chat-container">', unsafe_allow_html=True)
 
     for u, r, m, t, f, fd, ts in display_msgs:
@@ -434,7 +438,6 @@ if st.session_state.logged_in:
         """, unsafe_allow_html=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
-    # Auto scroll to bottom
     st.markdown("<div id='bottom'></div>", unsafe_allow_html=True)
     st.markdown("""
     <script>
