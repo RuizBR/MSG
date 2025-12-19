@@ -151,6 +151,9 @@ def set_typing(username):
         DO UPDATE SET last_typing=excluded.last_typing
     """, (username, int(time.time())))
 
+def remove_typing(username):
+    execute_db_write("DELETE FROM typing_users WHERE username=?", (username,))
+
 def get_online_users(timeout=10):
     now = int(time.time())
     query = """
@@ -234,14 +237,19 @@ if st.session_state.logged_in:
     )
 
     msg = st.sidebar.text_area("", key="chat_input", placeholder="Type a message...")
-    if msg.strip():
+
+    # Typing logic
+    if st.session_state["chat_input"].strip():
         set_typing(username)
+    else:
+        remove_typing(username)
 
     def send():
         if st.session_state["chat_input"].strip():
             add_text_message(username, st.session_state["chat_input"].strip(),
                              None if recipient=="All (public)" else recipient)
             st.session_state["chat_input"] = ""
+            remove_typing(username)  # remove typing after sending
 
     st.sidebar.button("Send", on_click=send, use_container_width=True)
 
@@ -251,6 +259,7 @@ if st.session_state.logged_in:
         if file:
             add_file_message(username, file,
                              None if recipient=="All (public)" else recipient)
+            remove_typing(username)
 
 # ================= DISPLAY CHAT =================
 st.title("💬 Team Chatbox")
