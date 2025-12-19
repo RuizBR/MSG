@@ -56,15 +56,12 @@ def login_user_db(username, password):
         return True
     return False
 
-# Initialize users DB
 init_users_db()
 
 # ================= CHAT DB =================
 def init_chat_db():
     conn = sqlite3.connect(CHAT_DB, check_same_thread=False)
     c = conn.cursor()
-
-    # Messages table
     c.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -77,8 +74,6 @@ def init_chat_db():
             timestamp TEXT
         )
     """)
-
-    # Active users
     c.execute("""
         CREATE TABLE IF NOT EXISTS active_users (
             session_id TEXT PRIMARY KEY,
@@ -86,15 +81,12 @@ def init_chat_db():
             last_seen INTEGER
         )
     """)
-
-    # Typing users
     c.execute("""
         CREATE TABLE IF NOT EXISTS typing_users (
             username TEXT PRIMARY KEY,
             last_typing INTEGER
         )
     """)
-
     conn.commit()
     conn.close()
 
@@ -155,38 +147,60 @@ def get_typing_users(timeout=4):
 
 # ================= MESSAGES =================
 def add_text_message(user, message, recipient=None):
-    conn = sqlite3.connect(CHAT_DB, check_same_thread=False)
-    c = conn.cursor()
-    c.execute("""
-        INSERT INTO messages VALUES (NULL,?,?,?, 'text', NULL, NULL, ?)
-    """, (user, recipient, message, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-    conn.commit()
-    conn.close()
+    retries = 5
+    while retries > 0:
+        try:
+            conn = sqlite3.connect(CHAT_DB, check_same_thread=False)
+            c = conn.cursor()
+            c.execute("""
+                INSERT INTO messages VALUES (NULL,?,?,?, 'text', NULL, NULL, ?)
+            """, (user, recipient, message, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+            conn.commit()
+            conn.close()
+            break
+        except sqlite3.OperationalError:
+            retries -= 1
+            time.sleep(0.1)
 
 def add_file_message(user, file, recipient=None):
-    conn = sqlite3.connect(CHAT_DB, check_same_thread=False)
-    c = conn.cursor()
-    c.execute("""
-        INSERT INTO messages VALUES (NULL,?,?,NULL,'file',?,?,?)
-    """, (user, recipient, file.name, file.getvalue(),
-          datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-    conn.commit()
-    conn.close()
+    retries = 5
+    while retries > 0:
+        try:
+            conn = sqlite3.connect(CHAT_DB, check_same_thread=False)
+            c = conn.cursor()
+            c.execute("""
+                INSERT INTO messages VALUES (NULL,?,?,NULL,'file',?,?,?)
+            """, (user, recipient, file.name, file.getvalue(),
+                  datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+            conn.commit()
+            conn.close()
+            break
+        except sqlite3.OperationalError:
+            retries -= 1
+            time.sleep(0.1)
 
 def get_messages(username):
-    conn = sqlite3.connect(CHAT_DB, check_same_thread=False)
-    c = conn.cursor()
-    c.execute("""
-        SELECT user, recipient, message, msg_type, file_name, file_data, timestamp
-        FROM messages
-        WHERE recipient IS NULL
-           OR recipient = ?
-           OR user = ?
-        ORDER BY id
-    """, (username, username))
-    rows = c.fetchall()
-    conn.close()
-    return rows
+    retries = 5
+    while retries > 0:
+        try:
+            conn = sqlite3.connect(CHAT_DB, check_same_thread=False)
+            c = conn.cursor()
+            c.execute("""
+                SELECT user, recipient, message, msg_type, file_name, file_data, timestamp
+                FROM messages
+                WHERE recipient IS NULL
+                   OR recipient = ?
+                   OR user = ?
+                ORDER BY id
+            """, (username, username))
+            rows = c.fetchall()
+            conn.close()
+            return rows
+        except sqlite3.OperationalError:
+            retries -= 1
+            time.sleep(0.1)
+    st.error("Database busy. Please refresh the page.")
+    return []
 
 # ================= STREAMLIT =================
 st.set_page_config(page_title="💬 Team Chatbox", layout="wide")
@@ -231,13 +245,11 @@ if st.session_state.logged_in:
     for u in online_list:
         st.sidebar.markdown(f"🟢 {u}")
 
-    # Recipient selector
     recipient = st.sidebar.selectbox(
         "Send To",
         ["All (public)"] + [u for u in online_list if u != username]
     )
 
-    # Message input
     msg = st.sidebar.text_area("", key="chat_input", placeholder="Type a message...")
     if msg.strip():
         set_typing(username)
@@ -250,7 +262,6 @@ if st.session_state.logged_in:
 
     st.sidebar.button("Send", on_click=send, use_container_width=True)
 
-    # File upload
     file = st.sidebar.file_uploader("📎 Attach file",
         type=["png","jpg","jpeg","pdf","docx"])
     if st.sidebar.button("Send File"):
