@@ -193,9 +193,9 @@ def get_messages(username):
     query = """
         SELECT user, recipient, message, msg_type, file_name, file_data, timestamp
         FROM messages
-        WHERE recipient IS NULL OR recipient = ''        -- public
-           OR recipient = ?                               -- private to me
-           OR user = ?                                    -- my messages
+        WHERE recipient IS NULL OR recipient = ''       -- public messages
+           OR recipient = ?                              -- messages sent to me
+           OR user = ?                                   -- messages I sent
         ORDER BY id
     """
     rows = execute_db_read(CHAT_DB, query, (username, username))
@@ -203,7 +203,7 @@ def get_messages(username):
 
 # ================= STREAMLIT CONFIG =================
 st.set_page_config(page_title="💬 Team Chatbox", layout="wide")
-st_autorefresh(interval=5000, key="refresh")
+st_autorefresh(interval=2000, key="refresh")
 
 # ================= LOGIN / REGISTER =================
 if "logged_in" not in st.session_state:
@@ -293,6 +293,7 @@ st.title("💬 Team Chatbox")
 if not st.session_state.logged_in:
     st.info("🔒 Please login to chat.")
 else:
+    # Combine DB messages with local messages for immediate display
     msgs = get_messages(username) + st.session_state.local_messages
     typing = [u for u in get_typing_users() if u != username]
 
@@ -300,6 +301,10 @@ else:
         st.caption("✍️ " + ", ".join(typing) + " typing…")
 
     for u, r, m, t, f, fd, ts in msgs:
+        # Show message if:
+        # 1) Public, or
+        # 2) Sent to me, or
+        # 3) I sent it
         if r and r not in (username, '') and u != username:
             continue
 
@@ -338,5 +343,3 @@ else:
     }
     </script>
     """, unsafe_allow_html=True)
-
-
