@@ -20,7 +20,7 @@ def hash_password(password):
 USERS_DB = "users.db"
 
 def init_users_db():
-    conn = sqlite3.connect(USERS_DB)
+    conn = sqlite3.connect(USERS_DB, check_same_thread=False)
     cur = conn.cursor()
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
@@ -33,7 +33,7 @@ def init_users_db():
 
 def register_user(username, password):
     try:
-        conn = sqlite3.connect(USERS_DB)
+        conn = sqlite3.connect(USERS_DB, check_same_thread=False)
         cur = conn.cursor()
         cur.execute("INSERT INTO users VALUES (?,?)", (username, hash_password(password)))
         conn.commit()
@@ -43,7 +43,7 @@ def register_user(username, password):
         return False, "Username already exists"
 
 def login_user_db(username, password):
-    conn = sqlite3.connect(USERS_DB)
+    conn = sqlite3.connect(USERS_DB, check_same_thread=False)
     cur = conn.cursor()
     cur.execute("SELECT password_hash FROM users WHERE username=?", (username,))
     row = cur.fetchone()
@@ -55,10 +55,10 @@ def login_user_db(username, password):
 init_users_db()
 
 # ================= CHAT DB =================
-CHAT_DB = "chatbox.db"
+CHAT_DB = "chat.db"
 
 def init_chat_db():
-    conn = sqlite3.connect(CHAT_DB)
+    conn = sqlite3.connect(CHAT_DB, check_same_thread=False)
     cur = conn.cursor()
     cur.execute("""
         CREATE TABLE IF NOT EXISTS messages (
@@ -91,10 +91,10 @@ def init_chat_db():
 init_chat_db()
 
 # ================= ROBUST DB FUNCTIONS =================
-def execute_db_write(query, params=(), retries=10, delay=0.2):
+def execute_db_write(db, query, params=(), retries=10, delay=0.2):
     while retries > 0:
         try:
-            conn = sqlite3.connect(CHAT_DB, timeout=30)
+            conn = sqlite3.connect(db, timeout=30, check_same_thread=False)
             cur = conn.cursor()
             cur.execute(query, params)
             conn.commit()
@@ -107,10 +107,10 @@ def execute_db_write(query, params=(), retries=10, delay=0.2):
     else:
         st.error("Database busy. Please refresh the page and try again.")
 
-def execute_db_read(query, params=(), retries=10, delay=0.2):
+def execute_db_read(db, query, params=(), retries=10, delay=0.2):
     while retries > 0:
         try:
-            conn = sqlite3.connect(CHAT_DB, timeout=30)
+            conn = sqlite3.connect(db, timeout=30, check_same_thread=False)
             cur = conn.cursor()
             cur.execute(query, params)
             rows = cur.fetchall()
@@ -125,34 +125,44 @@ def execute_db_read(query, params=(), retries=10, delay=0.2):
 # ================= CHAT FUNCTIONS =================
 def add_text_message(user, message, recipient=None):
     execute_db_write(
+        CHAT_DB,
         "INSERT INTO messages VALUES (NULL,?,?,?, 'text', NULL, NULL, ?)",
         (user, recipient, message, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     )
 
 def add_file_message(user, file, recipient=None):
     execute_db_write(
+        CHAT_DB,
         "INSERT INTO messages VALUES (NULL,?,?,NULL,'file',?,?,?)",
         (user, recipient, file.name, file.getvalue(),
          datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     )
 
 def update_active_user(session_id, username):
-    execute_db_write("""
+    execute_db_write(
+        CHAT_DB,
+        """
         INSERT INTO active_users VALUES (?,?,?)
         ON CONFLICT(session_id)
         DO UPDATE SET last_seen=excluded.last_seen,
                       username=excluded.username
-    """, (session_id, username, int(time.time())))
+        """,
+        (session_id, username, int(time.time()))
+    )
 
 def set_typing(username):
-    execute_db_write("""
+    execute_db_write(
+        CHAT_DB,
+        """
         INSERT INTO typing_users VALUES (?,?)
         ON CONFLICT(username)
         DO UPDATE SET last_typing=excluded.last_typing
-    """, (username, int(time.time())))
+        """,
+        (username, int(time.time()))
+    )
 
 def remove_typing(username):
-    execute_db_write("DELETE FROM typing_users WHERE username=?", (username,))
+    execute_db_write(CHAT_DB, "DELETE FROM typing_users WHERE username=?", (username,))
 
 def get_online_users(timeout=10):
     now = int(time.time())
@@ -164,7 +174,7 @@ def get_online_users(timeout=10):
           AND username != ''
         ORDER BY username
     """
-    rows = execute_db_read(query, (now, timeout))
+    rows = execute_db_read(CHAT_DB, query, (now, timeout))
     return [r[0] for r in rows] if rows else []
 
 def get_typing_users(timeout=4):
@@ -173,7 +183,7 @@ def get_typing_users(timeout=4):
         SELECT username FROM typing_users
         WHERE ? - last_typing <= ?
     """
-    rows = execute_db_read(query, (now, timeout))
+    rows = execute_db_read(CHAT_DB, query, (now, timeout))
     return [r[0] for r in rows] if rows else []
 
 def get_messages(username):
@@ -185,13 +195,13 @@ def get_messages(username):
            OR user = ?                                    -- my messages
         ORDER BY id
     """
-    rows = execute_db_read(query, (username, username))
+    rows = execute_db_read(CHAT_DB, query, (username, username))
     return rows if rows else []
 
 # ================= STREAMLIT CONFIG =================
 st.set_page_config(page_title="💬 Team Chatbox", layout="wide")
 
-# Always autorefresh so other users see new messages
+# Autorefresh for all users every 2 seconds
 st_autorefresh(interval=2000, key="refresh")
 
 # ================= LOGIN / REGISTER =================
@@ -238,7 +248,7 @@ if st.session_state.logged_in:
         ["All (public)"] + [u for u in online_list if u != username]
     )
 
-    # ================= CHAT INPUT (SIDEBAR) =================
+    # Chat input
     chat_input = st.sidebar.text_area(
         "", key="chat_input", placeholder="Type a message...", height=50
     )
@@ -257,7 +267,6 @@ if st.session_state.logged_in:
             )
             st.session_state.chat_input = ""
             remove_typing(username)
-            st.experimental_rerun()
 
     st.sidebar.button("Send", on_click=send, use_container_width=True)
 
@@ -274,7 +283,6 @@ if st.session_state.logged_in:
                 None if recipient == "All (public)" else recipient
             )
             remove_typing(username)
-            st.experimental_rerun()
 
 # ================= DISPLAY CHAT =================
 st.title("💬 Team Chatbox")
@@ -315,7 +323,7 @@ else:
         </div>
         """, unsafe_allow_html=True)
 
-    # Auto-scroll to latest message
+    # Auto-scroll
     st.markdown("<div id='bottom'></div>", unsafe_allow_html=True)
     st.markdown("""
     <script>
