@@ -206,7 +206,8 @@ st_autorefresh(interval=2000, key="refresh")
 # ================= GLOBAL CHAT CSS =================
 st.markdown("""
 <style>
-.chat-container { background-color: #ffffff; padding: 15px; border-radius: 15px; max-height: 70vh; overflow-y: auto; }
+.chat-container { display: flex; justify-content: center; }
+.chat-box { width: 100%; max-width: 900px; height: 600px; padding: 14px; border: 1px solid #ddd; border-radius: 14px; background: #ffffff; font-family: Segoe UI; overflow-y: auto; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -352,3 +353,4 @@ else:
     }
     </script>
     """, unsafe_allow_html=True)
+
