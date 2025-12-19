@@ -55,7 +55,7 @@ def login_user_db(username, password):
 init_users_db()
 
 # ================= CHAT DB =================
-CHAT_DB = "chat_fixed.db"  # fresh DB
+CHAT_DB = "chat_fixed.db"
 
 def init_chat_db():
     conn = sqlite3.connect(CHAT_DB, check_same_thread=False)
@@ -247,7 +247,7 @@ if st.session_state.logged_in:
 
     recipient = st.sidebar.selectbox(
         "Send To",
-        ["All (public)"] + all_usernames  # include offline users too
+        ["All (public)"] + all_usernames
     )
 
     # Chat input
@@ -293,13 +293,17 @@ else:
     if typing:
         st.caption("✍️ " + ", ".join(typing) + " typing…")
 
-    # Display messages strictly based on “Send To”
+    # Display messages strictly based on selection
     if recipient == "All (public)":
         st.subheader("🌐 Public Chat")
         display_msgs = [msg for msg in msgs if msg[1] in (None, '')]
     else:
         st.subheader(f"🔒 Private Chat with {recipient}")
-        display_msgs = [msg for msg in msgs if (msg[1] == recipient or (msg[0]==username and msg[1]==recipient))]
+        display_msgs = [
+            msg for msg in msgs
+            if (msg[0] == username and msg[1] == recipient)      # messages I sent
+               or (msg[0] == recipient and msg[1] == username)  # messages they sent to me
+        ]
 
     for u, r, m, t, f, fd, ts in display_msgs:
         me = u == username
