@@ -226,41 +226,6 @@ if st.session_state.logged_in:
     username = st.session_state.username
     update_active_user(st.session_state.session_id, username)
 
-    online_list = get_online_users()
-    st.sidebar.markdown(f"🟢 Online Users ({len(online_list)})")
-    for u in online_list:
-        st.sidebar.markdown(f"🟢 {u}")
-
-    recipient = st.sidebar.selectbox(
-        "Send To",
-        ["All (public)"] + [u for u in online_list if u != username]
-    )
-
-    msg = st.sidebar.text_area("", key="chat_input", placeholder="Type a message...")
-
-    # Typing logic
-    if st.session_state["chat_input"].strip():
-        set_typing(username)
-    else:
-        remove_typing(username)
-
-    def send():
-        if st.session_state["chat_input"].strip():
-            add_text_message(username, st.session_state["chat_input"].strip(),
-                             None if recipient=="All (public)" else recipient)
-            st.session_state["chat_input"] = ""
-            remove_typing(username)  # remove typing after sending
-
-    st.sidebar.button("Send", on_click=send, use_container_width=True)
-
-    file = st.sidebar.file_uploader("📎 Attach file",
-        type=["png","jpg","jpeg","pdf","docx"])
-    if st.sidebar.button("Send File"):
-        if file:
-            add_file_message(username, file,
-                             None if recipient=="All (public)" else recipient)
-            remove_typing(username)
-
 # ================= DISPLAY CHAT =================
 st.title("💬 Team Chatbox")
 
@@ -273,11 +238,11 @@ else:
     if typing:
         st.caption("✍️ " + ", ".join(typing) + " typing…")
 
+    # Chat display
+    chat_html = "<div style='max-width:900px;height:500px;overflow:auto;margin:auto;'>"
     for u, r, m, t, f, fd, ts in msgs:
-        # Skip messages not meant for this user
         if r and r not in (username, '') and u != username:
             continue
-
         me = u == username
         bg = "#0084ff" if me else "#e5e5ea"
         col = "white" if me else "black"
@@ -292,11 +257,47 @@ else:
             b = base64.b64encode(fd).decode()
             content = f"<a download='{f}' href='data:;base64,{b}'>{f}</a>"
 
-        st.markdown(f"""
-        <div style='background:{bg};color:{col};
+        chat_html += f"""
+        <div style="background:{bg};color:{col};
         padding:10px;border-radius:14px;margin:6px;
-        max-width:65%;{'margin-left:auto;' if me else ''}'>
+        max-width:65%;{'margin-left:auto;' if me else ''}">
         <b>{u} {priv_label}</b><br>{content}
         <div style="font-size:10px;opacity:.6">{ts}</div>
         </div>
-        """, unsafe_allow_html=True)
+        """
+    chat_html += "</div>"
+
+    st.components.v1.html(chat_html, height=500)
+
+    # ===== MESSAGE INPUT AT BOTTOM =====
+    online_list = get_online_users()
+    recipient = st.selectbox(
+        "Send To",
+        ["All (public)"] + [u for u in online_list if u != username]
+    )
+
+    msg = st.text_area("", key="chat_input", placeholder="Type a message...")
+
+    if st.session_state["chat_input"].strip():
+        set_typing(username)
+    else:
+        remove_typing(username)
+
+    col1, col2 = st.columns([4,1])
+    with col1:
+        pass  # text area is already above
+    with col2:
+        if st.button("Send"):
+            if st.session_state["chat_input"].strip():
+                add_text_message(username, st.session_state["chat_input"].strip(),
+                                 None if recipient=="All (public)" else recipient)
+                st.session_state["chat_input"] = ""
+                remove_typing(username)
+
+    # File upload
+    file = st.file_uploader("📎 Attach file", type=["png","jpg","jpeg","pdf","docx"])
+    if st.button("Send File"):
+        if file:
+            add_file_message(username, file,
+                             None if recipient=="All (public)" else recipient)
+            remove_typing(username)
