@@ -186,7 +186,7 @@ def get_typing_users(timeout=4):
     rows = execute_db_read(CHAT_DB, query, (now, timeout))
     return [r[0] for r in rows] if rows else []
 
-# ================= FIXED: GET MESSAGES =================
+# ================= GET MESSAGES =================
 def get_messages(username):
     query = """
         SELECT user, recipient, message, msg_type, file_name, file_data, timestamp
@@ -303,6 +303,9 @@ else:
                or (msg[0] == recipient and msg[1] == username)  # messages they sent to me
         ]
 
+    # Wrap all messages in a white background container
+    st.markdown("<div style='background:#ffffff; padding:15px; border-radius:15px;'>", unsafe_allow_html=True)
+
     for u, r, m, t, f, fd, ts in display_msgs:
         me = u == username
         bg = "#0084ff" if me else "#e5e5ea"
@@ -323,11 +326,11 @@ else:
 
         priv_label = "(private)" if recipient != "All (public)" else ""
 
-        # Message alignment
+        # Message bubble
         st.markdown(f"""
         <div style='display:flex; justify-content:{"flex-end" if me else "flex-start"}; margin:5px;'>
             {"<div></div>" if me else avatar}
-            <div style='background:{bg}; color:{col}; padding:10px; border-radius:14px; max-width:65%;'>
+            <div style='background:{bg}; color:{col}; padding:10px; border-radius:15px; max-width:65%;'>
                 <b>{u} {priv_label}</b><br>{content}
                 <div style="font-size:10px;opacity:.6">{ts}</div>
             </div>
@@ -335,6 +338,9 @@ else:
         </div>
         """, unsafe_allow_html=True)
 
+    st.markdown("</div>", unsafe_allow_html=True)  # close the container
+
+    # Auto scroll to bottom
     st.markdown("<div id='bottom'></div>", unsafe_allow_html=True)
     st.markdown("""
     <script>
