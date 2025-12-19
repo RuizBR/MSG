@@ -311,8 +311,9 @@ else:
                or (msg[0] == recipient and msg[1] == username)
         ]
 
-    # Build the entire chat HTML
-    chat_html = ""
+    # Wrap all messages in the white container
+    st.markdown('<div class="chat-container">', unsafe_allow_html=True)
+
     for u, r, m, t, f, fd, ts in display_msgs:
         me = u == username
         bg = "#0084ff" if me else "#e5e5ea"
@@ -329,8 +330,7 @@ else:
             content = f"<a download='{f}' href='data:;base64,{b}'>{f}</a>"
 
         priv_label = "(private)" if recipient != "All (public)" else ""
-
-        chat_html += f"""
+        st.markdown(f"""
         <div style='display:flex; justify-content:{"flex-end" if me else "flex-start"}; margin:5px;'>
             {"<div></div>" if me else avatar}
             <div style='background:{bg}; color:{col}; padding:10px; border-radius:15px; max-width:65%;'>
@@ -339,10 +339,9 @@ else:
             </div>
             {avatar if me else ""}
         </div>
-        """
+        """, unsafe_allow_html=True)
 
-    # Wrap everything in one chat-box
-    st.markdown(f'<div class="chat-box">{chat_html}</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # Auto scroll to bottom
     st.markdown("<div id='bottom'></div>", unsafe_allow_html=True)
@@ -354,3 +353,4 @@ else:
     }
     </script>
     """, unsafe_allow_html=True)
+
