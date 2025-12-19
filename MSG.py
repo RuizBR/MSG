@@ -292,10 +292,15 @@ else:
     if typing:
         st.caption("✍️ " + ", ".join(typing) + " typing…")
 
-    # ---------------- Public Chat ----------------
-    st.subheader("🌐 Public Chat")
-    public_msgs = [msg for msg in msgs if msg[1] in (None, '')]
-    for u, r, m, t, f, fd, ts in public_msgs:
+    # Display only messages based on selection
+    if recipient == "All (public)":
+        st.subheader("🌐 Public Chat")
+        display_msgs = [msg for msg in msgs if msg[1] in (None, '')]
+    else:
+        st.subheader(f"🔒 Private Chat with {recipient}")
+        display_msgs = [msg for msg in msgs if (msg[1] == recipient or (msg[0]==username and msg[1]==recipient))]
+
+    for u, r, m, t, f, fd, ts in display_msgs:
         me = u == username
         bg = "#0084ff" if me else "#e5e5ea"
         col = "white" if me else "black"
@@ -307,40 +312,15 @@ else:
             else:
                 b = base64.b64encode(fd).decode()
                 content = f"<a download='{f}' href='data:;base64,{b}'>{f}</a>"
+        priv_label = "(private)" if recipient != "All (public)" else ""
         st.markdown(f"""
         <div style='background:{bg};color:{col};
         padding:10px;border-radius:14px;margin:6px;
         max-width:65%;{'margin-left:auto;' if me else ''}'">
-        <b>{u}</b><br>{content}
+        <b>{u} {priv_label}</b><br>{content}
         <div style="font-size:10px;opacity:.6">{ts}</div>
         </div>
         """, unsafe_allow_html=True)
-
-    # ---------------- Private Chat ----------------
-    if recipient != "All (public)":
-        st.subheader(f"🔒 Private Chat with {recipient}")
-        private_msgs = [msg for msg in msgs if (msg[1] == recipient or (msg[0]==username and msg[1]==recipient))]
-        for u, r, m, t, f, fd, ts in private_msgs:
-            me = u == username
-            bg = "#0084ff" if me else "#e5e5ea"
-            col = "white" if me else "black"
-            content = m if t=="text" else ""
-            if t=="file" and f:
-                if f.lower().endswith(("png","jpg","jpeg")):
-                    img = base64.b64encode(fd).decode()
-                    content = f"<img src='data:image/png;base64,{img}' width=200>"
-                else:
-                    b = base64.b64encode(fd).decode()
-                    content = f"<a download='{f}' href='data:;base64,{b}'>{f}</a>"
-            priv_label = "(private)"
-            st.markdown(f"""
-            <div style='background:{bg};color:{col};
-            padding:10px;border-radius:14px;margin:6px;
-            max-width:65%;{'margin-left:auto;' if me else ''}'">
-            <b>{u} {priv_label}</b><br>{content}
-            <div style="font-size:10px;opacity:.6">{ts}</div>
-            </div>
-            """, unsafe_allow_html=True)
 
     # Auto-scroll
     st.markdown("<div id='bottom'></div>", unsafe_allow_html=True)
