@@ -208,29 +208,30 @@ if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.username = None
 
-st.sidebar.title("👤 Login / Register")
-login_tab, register_tab = st.tabs(["Login", "Register"])
+if not st.session_state.logged_in:
+    st.sidebar.title("👤 Login / Register")
+    login_tab, register_tab = st.tabs(["Login", "Register"])
 
-with login_tab:
-    login_user_input = st.text_input("Username", key="login_user")
-    login_pass_input = st.text_input("Password", type="password", key="login_pass")
-    if st.button("Login"):
-        if login_user_db(login_user_input, login_pass_input):
-            st.session_state.logged_in = True
-            st.session_state.username = login_user_input
-            st.success(f"Logged in as {login_user_input}")
-        else:
-            st.error("Invalid username or password")
+    with login_tab:
+        login_user_input = st.text_input("Username", key="login_user")
+        login_pass_input = st.text_input("Password", type="password", key="login_pass")
+        if st.button("Login"):
+            if login_user_db(login_user_input, login_pass_input):
+                st.session_state.logged_in = True
+                st.session_state.username = login_user_input
+                st.success(f"Logged in as {login_user_input}")
+            else:
+                st.error("Invalid username or password")
 
-with register_tab:
-    reg_user_input = st.text_input("New Username", key="reg_user")
-    reg_pass_input = st.text_input("New Password", type="password", key="reg_pass")
-    if st.button("Register"):
-        success, msg = register_user(reg_user_input, reg_pass_input)
-        if success:
-            st.success(msg)
-        else:
-            st.error(msg)
+    with register_tab:
+        reg_user_input = st.text_input("New Username", key="reg_user")
+        reg_pass_input = st.text_input("New Password", type="password", key="reg_pass")
+        if st.button("Register"):
+            success, msg = register_user(reg_user_input, reg_pass_input)
+            if success:
+                st.success(msg)
+            else:
+                st.error(msg)
 
 # ================= CHAT =================
 if st.session_state.logged_in:
@@ -250,7 +251,6 @@ if st.session_state.logged_in:
         ["All (public)"] + all_usernames
     )
 
-    # Chat input
     chat_input = st.sidebar.text_area(
         "", key="chat_input", placeholder="Type a message...", height=50
     )
@@ -270,7 +270,6 @@ if st.session_state.logged_in:
 
     st.sidebar.button("Send", on_click=send, use_container_width=True)
 
-    # File upload
     file = st.sidebar.file_uploader(
         "📎 Attach file",
         type=["png","jpg","jpeg","pdf","docx"]
@@ -293,7 +292,6 @@ else:
     if typing:
         st.caption("✍️ " + ", ".join(typing) + " typing…")
 
-    # Display messages strictly based on selection
     if recipient == "All (public)":
         st.subheader("🌐 Public Chat")
         display_msgs = [msg for msg in msgs if msg[1] in (None, '')]
@@ -309,25 +307,34 @@ else:
         me = u == username
         bg = "#0084ff" if me else "#e5e5ea"
         col = "white" if me else "black"
-        content = m if t=="text" else ""
-        if t=="file" and f:
-            if f.lower().endswith(("png","jpg","jpeg")):
-                img = base64.b64encode(fd).decode()
-                content = f"<img src='data:image/png;base64,{img}' width=200>"
-            else:
-                b = base64.b64encode(fd).decode()
-                content = f"<a download='{f}' href='data:;base64,{b}'>{f}</a>"
+
+        # Avatar using first letter
+        avatar = f"<div style='width:30px;height:30px;background:#888;color:white;border-radius:50%;text-align:center;line-height:30px;font-weight:bold;margin-right:8px;'>{u[0].upper()}</div>"
+
+        # Message content
+        if t == "text":
+            content = m
+        elif f and f.lower().endswith(("png","jpg","jpeg")):
+            img = base64.b64encode(fd).decode()
+            content = f"<img src='data:image/png;base64,{img}' width=200>"
+        else:
+            b = base64.b64encode(fd).decode()
+            content = f"<a download='{f}' href='data:;base64,{b}'>{f}</a>"
+
         priv_label = "(private)" if recipient != "All (public)" else ""
+
+        # Message alignment
         st.markdown(f"""
-        <div style='background:{bg};color:{col};
-        padding:10px;border-radius:14px;margin:6px;
-        max-width:65%;{'margin-left:auto;' if me else ''}'">
-        <b>{u} {priv_label}</b><br>{content}
-        <div style="font-size:10px;opacity:.6">{ts}</div>
+        <div style='display:flex; justify-content:{"flex-end" if me else "flex-start"}; margin:5px;'>
+            {"<div></div>" if me else avatar}
+            <div style='background:{bg}; color:{col}; padding:10px; border-radius:14px; max-width:65%;'>
+                <b>{u} {priv_label}</b><br>{content}
+                <div style="font-size:10px;opacity:.6">{ts}</div>
+            </div>
+            {avatar if me else ""}
         </div>
         """, unsafe_allow_html=True)
 
-    # Auto-scroll
     st.markdown("<div id='bottom'></div>", unsafe_allow_html=True)
     st.markdown("""
     <script>
