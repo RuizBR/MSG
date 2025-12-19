@@ -206,8 +206,17 @@ st_autorefresh(interval=2000, key="refresh")
 # ================= GLOBAL CHAT CSS =================
 st.markdown("""
 <style>
-.chat-container { display: flex; justify-content: center; }
-.chat-box { width: 100%; max-width: 900px; height: 600px; padding: 14px; border: 1px solid #ddd; border-radius: 14px; background: #ffffff; font-family: Segoe UI; overflow-y: auto; }
+.chat-box {
+    width: 100%;
+    max-width: 900px;
+    height: 600px;
+    padding: 14px;
+    border: 1px solid #ddd;
+    border-radius: 14px;
+    background: #ffffff;
+    font-family: Segoe UI;
+    overflow-y: auto;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -311,14 +320,14 @@ else:
                or (msg[0] == recipient and msg[1] == username)
         ]
 
-    # Wrap all messages in the white container
-    st.markdown('<div class="chat-container">', unsafe_allow_html=True)
-
+    # Build HTML for all messages
+    chat_html = ""
     for u, r, m, t, f, fd, ts in display_msgs:
         me = u == username
         bg = "#0084ff" if me else "#e5e5ea"
         col = "white" if me else "black"
-        avatar = f"<div style='width:30px;height:30px;background:#888;color:white;border-radius:50%;text-align:center;line-height:30px;font-weight:bold;margin-right:8px;'>{u[0].upper()}</div>"
+        avatar_bg = "#888"
+        avatar_letter = u[0].upper()
 
         if t == "text":
             content = m
@@ -330,18 +339,34 @@ else:
             content = f"<a download='{f}' href='data:;base64,{b}'>{f}</a>"
 
         priv_label = "(private)" if recipient != "All (public)" else ""
-        st.markdown(f"""
-        <div style='display:flex; justify-content:{"flex-end" if me else "flex-start"}; margin:5px;'>
-            {"<div></div>" if me else avatar}
-            <div style='background:{bg}; color:{col}; padding:10px; border-radius:15px; max-width:65%;'>
-                <b>{u} {priv_label}</b><br>{content}
-                <div style="font-size:10px;opacity:.6">{ts}</div>
-            </div>
-            {avatar if me else ""}
-        </div>
-        """, unsafe_allow_html=True)
 
-    st.markdown('</div>', unsafe_allow_html=True)
+        if me:
+            # Sent message: align right
+            chat_html += f"""
+            <div style='display:flex; justify-content:flex-end; margin:5px; align-items:flex-end;'>
+                <div style='background:{bg}; color:{col}; padding:10px; border-radius:15px; max-width:65%;'>
+                    <b>{u} {priv_label}</b><br>{content}
+                    <div style="font-size:10px;opacity:.6">{ts}</div>
+                </div>
+                <div style='width:30px;height:30px;background:{avatar_bg};color:white;border-radius:50%;
+                            text-align:center;line-height:30px;font-weight:bold;margin-left:8px;'>{avatar_letter}</div>
+            </div>
+            """
+        else:
+            # Received message: align left
+            chat_html += f"""
+            <div style='display:flex; justify-content:flex-start; margin:5px; align-items:flex-end;'>
+                <div style='width:30px;height:30px;background:{avatar_bg};color:white;border-radius:50%;
+                            text-align:center;line-height:30px;font-weight:bold;margin-right:8px;'>{avatar_letter}</div>
+                <div style='background:{bg}; color:{col}; padding:10px; border-radius:15px; max-width:65%;'>
+                    <b>{u} {priv_label}</b><br>{content}
+                    <div style="font-size:10px;opacity:.6">{ts}</div>
+                </div>
+            </div>
+            """
+
+    # Wrap everything in one chat-box
+    st.markdown(f'<div class="chat-box">{chat_html}</div>', unsafe_allow_html=True)
 
     # Auto scroll to bottom
     st.markdown("<div id='bottom'></div>", unsafe_allow_html=True)
@@ -353,4 +378,3 @@ else:
     }
     </script>
     """, unsafe_allow_html=True)
-
