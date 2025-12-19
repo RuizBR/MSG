@@ -122,7 +122,7 @@ def execute_db_read(query, params=(), retries=10, delay=0.2):
         except sqlite3.OperationalError:
             retries -= 1
             time.sleep(delay)
-    st.error("Database busy. Please refresh the page and try again.")
+    # Return empty list instead of None
     return []
 
 # ================= CHAT FUNCTIONS =================
@@ -164,7 +164,8 @@ def get_online_users(timeout=10):
           AND username != ''
         ORDER BY username
     """
-    return execute_db_read(query, (now, timeout))
+    rows = execute_db_read(query, (now, timeout))
+    return rows if rows else []
 
 def get_typing_users(timeout=4):
     now = int(time.time())
@@ -172,7 +173,8 @@ def get_typing_users(timeout=4):
         SELECT username FROM typing_users
         WHERE ? - last_typing <= ?
     """
-    return execute_db_read(query, (now, timeout))
+    rows = execute_db_read(query, (now, timeout))
+    return rows if rows else []
 
 def get_messages(username):
     query = """
@@ -183,7 +185,8 @@ def get_messages(username):
            OR user = ?
         ORDER BY id
     """
-    return execute_db_read(query, (username, username))
+    rows = execute_db_read(query, (username, username))
+    return rows if rows else []
 
 # ================= STREAMLIT =================
 st.set_page_config(page_title="💬 Team Chatbox", layout="wide")
@@ -223,8 +226,8 @@ if st.session_state.logged_in:
     username = st.session_state.username
     update_active_user(st.session_state.session_id, username)
 
-    st.sidebar.markdown(f"🟢 Online Users ({len(get_online_users())})")
     online_list = get_online_users()
+    st.sidebar.markdown(f"🟢 Online Users ({len(online_list)})")
     for u in online_list:
         st.sidebar.markdown(f"🟢 {u}")
 
@@ -259,11 +262,13 @@ if not st.session_state.logged_in:
     st.info("🔒 Please login to chat.")
 else:
     msgs = get_messages(username)
-    typing = [u for u in get_typing_users() if u != username]
+    typing = [u[0] for u in get_typing_users() if u[0] != username]
+
     if typing:
         st.caption("✍️ " + ", ".join(typing) + " typing…")
 
     for u, r, m, t, f, fd, ts in msgs:
+        # Skip messages not meant for this user
         if r and r != username and u != username:
             continue
 
