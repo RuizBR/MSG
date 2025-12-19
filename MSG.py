@@ -139,26 +139,26 @@ if st.sidebar.button("Send File"):
         add_file_message(username, uploaded_file)
 
 # ================= AUTO REFRESH =================
-st_autorefresh(interval=3000, limit=None, key="chat_refresh")
+st_autorefresh(interval=5000, limit=None, key="chat_refresh")
 
 init_db()
 
 # ================= VIDEO CALL =================
 #st.title("💬 Team Chatbox")
-#room_name, started = get_video_call_status()
+room_name, started = get_video_call_status()
 
-#if started == 0:
-#    if st.button("📹 Start Video Call"):
-#        room_name = "TeamChat_" + ''.join(random.choices(string.ascii_letters + string.digits, k=6))
-#        start_video_call(room_name)
-#        js = f"window.open('https://meet.jit.si/{room_name}', '_blank')"
-#        st.components.v1.html(f"<script>{js}</script>", height=0)
-#else:
-#    st.markdown(f"### 📹 Video Call Active: Room `{room_name}`")
-#    st.markdown(f"[Join Video Call in New Tab](https://meet.jit.si/{room_name})", unsafe_allow_html=True)
-#    st.info("Click the link to join the video call in a new tab.")
-#    if st.button("❌ End Video Call"):
-#        end_video_call()
+if started == 0:
+    if st.button("📹 Start Video Call"):
+        room_name = "TeamChat_" + ''.join(random.choices(string.ascii_letters + string.digits, k=6))
+        start_video_call(room_name)
+        js = f"window.open('https://meet.jit.si/{room_name}', '_blank')"
+        st.components.v1.html(f"<script>{js}</script>", height=0)
+else:
+    st.markdown(f"### 📹 Video Call Active: Room `{room_name}`")
+    st.markdown(f"[Join Video Call in New Tab](https://meet.jit.si/{room_name})", unsafe_allow_html=True)
+    st.info("Click the link to join the video call in a new tab.")
+    if st.button("❌ End Video Call"):
+        end_video_call()
 
 # ================= CHAT DISPLAY =================
 messages = get_messages()
