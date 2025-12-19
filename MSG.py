@@ -12,9 +12,6 @@ from streamlit_autorefresh import st_autorefresh
 if "session_id" not in st.session_state:
     st.session_state.session_id = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
 
-if "local_messages" not in st.session_state:
-    st.session_state.local_messages = []
-
 # ================= UTILS =================
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
@@ -58,7 +55,7 @@ def login_user_db(username, password):
 init_users_db()
 
 # ================= CHAT DB =================
-CHAT_DB = "chat_fixed.db"  # new clean DB
+CHAT_DB = "chat_fixed.db"  # fresh DB
 
 def init_chat_db():
     conn = sqlite3.connect(CHAT_DB, check_same_thread=False)
@@ -239,6 +236,9 @@ if st.session_state.logged_in:
     username = st.session_state.username
     update_active_user(st.session_state.session_id, username)
 
+    all_users = execute_db_read(USERS_DB, "SELECT username FROM users")
+    all_usernames = [u[0] for u in all_users if u[0] != username]
+
     online_list = get_online_users()
     st.sidebar.markdown(f"🟢 Online Users ({len(online_list)})")
     for u in online_list:
@@ -246,7 +246,7 @@ if st.session_state.logged_in:
 
     recipient = st.sidebar.selectbox(
         "Send To",
-        ["All (public)"] + [u for u in online_list if u != username]
+        ["All (public)"] + all_usernames  # include offline users too
     )
 
     # Chat input
@@ -292,35 +292,55 @@ else:
     if typing:
         st.caption("✍️ " + ", ".join(typing) + " typing…")
 
-    for u, r, m, t, f, fd, ts in msgs:
-        # Display logic for public and private messages
-        if r and r not in (username, '') and u != username:
-            continue  # skip messages not meant for me
-
+    # ---------------- Public Chat ----------------
+    st.subheader("🌐 Public Chat")
+    public_msgs = [msg for msg in msgs if msg[1] in (None, '')]
+    for u, r, m, t, f, fd, ts in public_msgs:
         me = u == username
         bg = "#0084ff" if me else "#e5e5ea"
         col = "white" if me else "black"
-        priv_label = "(private)" if r else ""
-
-        if t == "text":
-            content = m
-        elif f and f.lower().endswith(("png","jpg","jpeg")):
-            img = base64.b64encode(fd).decode()
-            content = f"<img src='data:image/png;base64,{img}' width=200>"
-        elif f:
-            b = base64.b64encode(fd).decode()
-            content = f"<a download='{f}' href='data:;base64,{b}'>{f}</a>"
-        else:
-            content = ""
-
+        content = m if t=="text" else ""
+        if t=="file" and f:
+            if f.lower().endswith(("png","jpg","jpeg")):
+                img = base64.b64encode(fd).decode()
+                content = f"<img src='data:image/png;base64,{img}' width=200>"
+            else:
+                b = base64.b64encode(fd).decode()
+                content = f"<a download='{f}' href='data:;base64,{b}'>{f}</a>"
         st.markdown(f"""
         <div style='background:{bg};color:{col};
         padding:10px;border-radius:14px;margin:6px;
         max-width:65%;{'margin-left:auto;' if me else ''}'">
-        <b>{u} {priv_label}</b><br>{content}
+        <b>{u}</b><br>{content}
         <div style="font-size:10px;opacity:.6">{ts}</div>
         </div>
         """, unsafe_allow_html=True)
+
+    # ---------------- Private Chat ----------------
+    if recipient != "All (public)":
+        st.subheader(f"🔒 Private Chat with {recipient}")
+        private_msgs = [msg for msg in msgs if (msg[1] == recipient or (msg[0]==username and msg[1]==recipient))]
+        for u, r, m, t, f, fd, ts in private_msgs:
+            me = u == username
+            bg = "#0084ff" if me else "#e5e5ea"
+            col = "white" if me else "black"
+            content = m if t=="text" else ""
+            if t=="file" and f:
+                if f.lower().endswith(("png","jpg","jpeg")):
+                    img = base64.b64encode(fd).decode()
+                    content = f"<img src='data:image/png;base64,{img}' width=200>"
+                else:
+                    b = base64.b64encode(fd).decode()
+                    content = f"<a download='{f}' href='data:;base64,{b}'>{f}</a>"
+            priv_label = "(private)"
+            st.markdown(f"""
+            <div style='background:{bg};color:{col};
+            padding:10px;border-radius:14px;margin:6px;
+            max-width:65%;{'margin-left:auto;' if me else ''}'">
+            <b>{u} {priv_label}</b><br>{content}
+            <div style="font-size:10px;opacity:.6">{ts}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
     # Auto-scroll
     st.markdown("<div id='bottom'></div>", unsafe_allow_html=True)
