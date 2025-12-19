@@ -109,7 +109,7 @@ username = st.sidebar.text_input("Your Name", placeholder="Enter your name...")
 
 if st.sidebar.button("🗑️ Clear Chat"):
     clear_messages()
-    st.experimental_rerun()
+    st.rerun()
 
 st.sidebar.markdown("### 💬 Message")
 
@@ -159,7 +159,7 @@ else:
     st.info("Click the link to join the video call in a new tab.")
     if st.button("❌ End Video Call"):
         end_video_call()
-        st.experimental_rerun()
+        st.rerun()
 
 # ================= CHAT DISPLAY =================
 messages = get_messages()
@@ -237,6 +237,7 @@ if (chatBox) {
 """
 
 st.components.v1.html(chat_html, height=650, scrolling=False)
+
 
 
 
