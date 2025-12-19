@@ -305,6 +305,8 @@ else:
 
     for u, r, m, t, f, fd, ts in display_msgs:
         me = u == username
+        bg = "#0084ff" if me else "#e5e5ea"
+        col = "white" if me else "black"
 
         # Avatar using first letter
         avatar = f"<div style='width:30px;height:30px;background:#888;color:white;border-radius:50%;text-align:center;line-height:30px;font-weight:bold;margin-right:8px;'>{u[0].upper()}</div>"
@@ -321,11 +323,11 @@ else:
 
         priv_label = "(private)" if recipient != "All (public)" else ""
 
-        # Message alignment with white background and curved corners
+        # Message alignment
         st.markdown(f"""
         <div style='display:flex; justify-content:{"flex-end" if me else "flex-start"}; margin:5px;'>
             {"<div></div>" if me else avatar}
-            <div style='background:#ffffff; color:#000000; padding:10px; border-radius:20px; max-width:65%; box-shadow: 0px 2px 5px rgba(0,0,0,0.2);'>
+            <div style='background:{bg}; color:{col}; padding:10px; border-radius:14px; max-width:65%;'>
                 <b>{u} {priv_label}</b><br>{content}
                 <div style="font-size:10px;opacity:.6">{ts}</div>
             </div>
