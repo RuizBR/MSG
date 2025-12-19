@@ -7,53 +7,47 @@ import string
 import time
 import hashlib
 from streamlit_autorefresh import st_autorefresh
-import threading
 
-# ================= SESSION ID =================
+# ================= SESSION =================
 if "session_id" not in st.session_state:
-    st.session_state.session_id = ''.join(
-        random.choices(string.ascii_letters + string.digits, k=16)
-    )
+    st.session_state.session_id = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
 
-# ================= DATABASE FILES & LOCKS =================
-USERS_DB = "users.db"
-CHAT_DB = "chatbox.db"
-
-DB_LOCK = threading.Lock()  # thread-safe lock for chat db
+# ================= UTILS =================
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
 
 # ================= USERS DB =================
-USERS_CONN = sqlite3.connect(USERS_DB, check_same_thread=False)
+USERS_DB = "users.db"
 
 def init_users_db():
-    cur = USERS_CONN.cursor()
+    conn = sqlite3.connect(USERS_DB)
+    cur = conn.cursor()
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             username TEXT PRIMARY KEY,
             password_hash TEXT
         )
     """)
-    USERS_CONN.commit()
-    cur.close()
-
-def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
+    conn.commit()
+    conn.close()
 
 def register_user(username, password):
-    cur = USERS_CONN.cursor()
     try:
+        conn = sqlite3.connect(USERS_DB)
+        cur = conn.cursor()
         cur.execute("INSERT INTO users VALUES (?,?)", (username, hash_password(password)))
-        USERS_CONN.commit()
+        conn.commit()
+        conn.close()
         return True, "Registration successful!"
     except sqlite3.IntegrityError:
         return False, "Username already exists"
-    finally:
-        cur.close()
 
 def login_user_db(username, password):
-    cur = USERS_CONN.cursor()
+    conn = sqlite3.connect(USERS_DB)
+    cur = conn.cursor()
     cur.execute("SELECT password_hash FROM users WHERE username=?", (username,))
     row = cur.fetchone()
-    cur.close()
+    conn.close()
     if row and row[0] == hash_password(password):
         return True
     return False
@@ -61,127 +55,127 @@ def login_user_db(username, password):
 init_users_db()
 
 # ================= CHAT DB =================
-CHAT_CONN = sqlite3.connect(CHAT_DB, check_same_thread=False)
+CHAT_DB = "chatbox.db"
 
 def init_chat_db():
-    with DB_LOCK:
-        cur = CHAT_CONN.cursor()
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user TEXT,
-                recipient TEXT,
-                message TEXT,
-                msg_type TEXT,
-                file_name TEXT,
-                file_data BLOB,
-                timestamp TEXT
-            )
-        """)
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS active_users (
-                session_id TEXT PRIMARY KEY,
-                username TEXT,
-                last_seen INTEGER
-            )
-        """)
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS typing_users (
-                username TEXT PRIMARY KEY,
-                last_typing INTEGER
-            )
-        """)
-        CHAT_CONN.commit()
-        cur.close()
+    conn = sqlite3.connect(CHAT_DB)
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user TEXT,
+            recipient TEXT,
+            message TEXT,
+            msg_type TEXT,
+            file_name TEXT,
+            file_data BLOB,
+            timestamp TEXT
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS active_users (
+            session_id TEXT PRIMARY KEY,
+            username TEXT,
+            last_seen INTEGER
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS typing_users (
+            username TEXT PRIMARY KEY,
+            last_typing INTEGER
+        )
+    """)
+    conn.commit()
+    conn.close()
 
 init_chat_db()
 
-# ================= ACTIVE USERS =================
-def update_active_user(session_id, username):
-    with DB_LOCK:
-        cur = CHAT_CONN.cursor()
-        cur.execute("""
-            INSERT INTO active_users VALUES (?,?,?)
-            ON CONFLICT(session_id)
-            DO UPDATE SET last_seen=excluded.last_seen,
-                          username=excluded.username
-        """, (session_id, username, int(time.time())))
-        CHAT_CONN.commit()
-        cur.close()
+# ================= CHAT FUNCTIONS =================
+def execute_db_write(query, params=(), retries=5):
+    """Executes a write operation with retry logic for SQLite busy errors."""
+    while retries > 0:
+        try:
+            conn = sqlite3.connect(CHAT_DB, timeout=5)
+            cur = conn.cursor()
+            cur.execute(query, params)
+            conn.commit()
+            conn.close()
+            break
+        except sqlite3.OperationalError:
+            retries -= 1
+            time.sleep(0.1)
+    else:
+        st.error("Database busy. Please refresh the page and try again.")
 
-def get_online_users(timeout=10):
-    now = int(time.time())
-    with DB_LOCK:
-        cur = CHAT_CONN.cursor()
-        cur.execute("""
-            SELECT DISTINCT username
-            FROM active_users
-            WHERE ? - last_seen <= ?
-              AND username IS NOT NULL
-              AND username != ''
-            ORDER BY username
-        """, (now, timeout))
-        users = [r[0] for r in cur.fetchall()]
-        cur.close()
-    return users
-
-# ================= TYPING =================
-def set_typing(username):
-    with DB_LOCK:
-        cur = CHAT_CONN.cursor()
-        cur.execute("""
-            INSERT INTO typing_users VALUES (?,?)
-            ON CONFLICT(username)
-            DO UPDATE SET last_typing=excluded.last_typing
-        """, (username, int(time.time())))
-        CHAT_CONN.commit()
-        cur.close()
-
-def get_typing_users(timeout=4):
-    now = int(time.time())
-    with DB_LOCK:
-        cur = CHAT_CONN.cursor()
-        cur.execute("""
-            SELECT username FROM typing_users
-            WHERE ? - last_typing <= ?
-        """, (now, timeout))
-        users = [r[0] for r in cur.fetchall()]
-        cur.close()
-    return users
-
-# ================= MESSAGES =================
 def add_text_message(user, message, recipient=None):
-    with DB_LOCK:
-        cur = CHAT_CONN.cursor()
-        cur.execute("""
-            INSERT INTO messages VALUES (NULL,?,?,?, 'text', NULL, NULL, ?)
-        """, (user, recipient, message, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-        CHAT_CONN.commit()
-        cur.close()
+    execute_db_write(
+        "INSERT INTO messages VALUES (NULL,?,?,?, 'text', NULL, NULL, ?)",
+        (user, recipient, message, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    )
 
 def add_file_message(user, file, recipient=None):
-    with DB_LOCK:
-        cur = CHAT_CONN.cursor()
-        cur.execute("""
-            INSERT INTO messages VALUES (NULL,?,?,NULL,'file',?,?,?)
-        """, (user, recipient, file.name, file.getvalue(),
-              datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-        CHAT_CONN.commit()
-        cur.close()
+    execute_db_write(
+        "INSERT INTO messages VALUES (NULL,?,?,NULL,'file',?,?,?)",
+        (user, recipient, file.name, file.getvalue(),
+         datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    )
+
+def update_active_user(session_id, username):
+    execute_db_write("""
+        INSERT INTO active_users VALUES (?,?,?)
+        ON CONFLICT(session_id)
+        DO UPDATE SET last_seen=excluded.last_seen,
+                      username=excluded.username
+    """, (session_id, username, int(time.time())))
+
+def set_typing(username):
+    execute_db_write("""
+        INSERT INTO typing_users VALUES (?,?)
+        ON CONFLICT(username)
+        DO UPDATE SET last_typing=excluded.last_typing
+    """, (username, int(time.time())))
+
+def get_online_users(timeout=10):
+    conn = sqlite3.connect(CHAT_DB)
+    cur = conn.cursor()
+    now = int(time.time())
+    cur.execute("""
+        SELECT DISTINCT username
+        FROM active_users
+        WHERE ? - last_seen <= ?
+          AND username IS NOT NULL
+          AND username != ''
+        ORDER BY username
+    """, (now, timeout))
+    users = [r[0] for r in cur.fetchall()]
+    conn.close()
+    return users
+
+def get_typing_users(timeout=4):
+    conn = sqlite3.connect(CHAT_DB)
+    cur = conn.cursor()
+    now = int(time.time())
+    cur.execute("""
+        SELECT username FROM typing_users
+        WHERE ? - last_typing <= ?
+    """, (now, timeout))
+    users = [r[0] for r in cur.fetchall()]
+    conn.close()
+    return users
 
 def get_messages(username):
-    with DB_LOCK:
-        cur = CHAT_CONN.cursor()
-        cur.execute("""
-            SELECT user, recipient, message, msg_type, file_name, file_data, timestamp
-            FROM messages
-            WHERE recipient IS NULL
-               OR recipient = ?
-               OR user = ?
-            ORDER BY id
-        """, (username, username))
-        rows = cur.fetchall()
-        cur.close()
+    conn = sqlite3.connect(CHAT_DB)
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT user, recipient, message, msg_type, file_name, file_data, timestamp
+        FROM messages
+        WHERE recipient IS NULL
+           OR recipient = ?
+           OR user = ?
+        ORDER BY id
+    """, (username, username))
+    rows = cur.fetchall()
+    conn.close()
     return rows
 
 # ================= STREAMLIT =================
